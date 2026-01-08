@@ -1,4 +1,7 @@
-# GUÍA DE INSTALACIÓN
+### Proyecto realizado en grupo por: Martina Barone, Inés Gayol y Ana Clara Vázquez.
+### Documentación de la aplicación en la carpeta "Documentación"
+
+## GUÍA DE INSTALACIÓN
 
 ### Requisitos
 - Tener instalado **Docker Desktop**
