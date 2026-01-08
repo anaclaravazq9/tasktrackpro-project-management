@@ -1,0 +1,40 @@
+@using Interfaz.ServiciosInterfaz
+@inject LogicaSesion Sesion
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+
+@if (Sesion.UsuarioLogueado is not null)
+{
+    <NavLink href="/perfil"
+             class="ms-2 me-4 d-flex align-items-center justify-content-center rounded-circle border border-secondary"
+             style="width: 40px; height: 40px;">
+        <i class="bi bi-person-circle text-black" style="font-size: 1.5rem;"></i>
+    </NavLink>
+}
+
+@code {
+    private bool sesionCargada = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sesionCargada)
+        {
+            bool haySesionActiva = await Sesion.HaySesionActiva();
+
+            if (!haySesionActiva)
+            {
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                await Sesion.ActualizarSesion();
+                sesionCargada = true;
+                StateHasChanged(); // Vuelve a renderizar para mostrar la sesión activa
+            }
+
+            sesionCargada = true;
+        }
+    }
+
+}

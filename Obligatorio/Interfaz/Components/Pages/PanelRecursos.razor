@@ -1,0 +1,98 @@
+@page "/proyecto/{id:int}/panel_recursos"
+@rendermode InteractiveServer
+@using System.ComponentModel.DataAnnotations
+@using DTOs
+@using Interfaz.ServiciosInterfaz
+@using Controladores
+@inject ControladorProyectos ControladorProyectos
+@inject NavigationManager NavigationManager
+@inject LogicaSesion Sesion
+@inject ControladorRecursos ControladorRecursos
+
+@if (Sesion.UsuarioLogueado == null || !sesionCargada)
+{
+}
+else if (proyecto == null)
+{
+    <div class="alert alert-danger">No se encontró el proyecto.</div>
+}
+else
+{
+    <h3>Panel de Recursos</h3>
+
+    @if (recursos == null || recursos.Count == 0)
+    {
+        <p>No hay recursos disponibles.</p>
+    }
+    else
+    {
+        <table class="table table-striped">
+            <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Tipo</th>
+                <th>Descripción</th>
+                <th>Capacidad</th>
+                <th>Rangos en uso</th>
+                <th>Nivel de uso</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (RecursoPanelDTO recurso in recursos)
+            {
+                <tr>
+                    <td>@recurso.Nombre</td>
+                    <td>@recurso.Tipo</td>
+                    <td>@recurso.Descripcion</td>
+                    <td>@recurso.Capacidad</td>
+                    <td>
+                        @foreach (var rango in recurso.RangosEnUso)
+                        {
+                            <div>@rango.FechaInicio.ToShortDateString() - @rango.FechaFin.ToShortDateString() (@rango.CantidadDeUsos usos)</div>
+                        }
+                    </td>
+                    <td>@recurso.NivelDeUso</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private bool sesionCargada = false;
+    private ProyectoDTO proyecto;
+    private List<RecursoPanelDTO> recursos = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sesionCargada)
+        {
+            bool haySesionActiva = await Sesion.HaySesionActiva();
+
+            if (!haySesionActiva)
+            {
+                NavigationManager.NavigateTo("/");
+            }
+            else
+            {
+                await Sesion.ActualizarSesion();
+
+                try
+                {
+                    proyecto = ControladorProyectos.ObtenerProyectoPorId(Id);
+                    recursos = ControladorRecursos.ObtenerPanelRecursos(Id);
+                }
+                catch
+                {
+                    NavigationManager.NavigateTo("/Error");
+                    return;
+                }
+
+                sesionCargada = true;
+                StateHasChanged();
+            }
+        }
+    }
+}

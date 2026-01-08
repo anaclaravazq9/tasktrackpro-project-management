@@ -1,0 +1,726 @@
+@page "/usuarios"
+@rendermode InteractiveServer
+@using System.ComponentModel.DataAnnotations
+@using Controladores
+@using Interfaz.ServiciosInterfaz
+@using DTOs
+@using Excepciones
+@inject LogicaSesion Sesion
+@inject NavigationManager Navigation
+@inject ControladorUsuarios ControladorUsuarios
+
+
+@if (Sesion.UsuarioLogueado == null || !sesionCargada)
+{
+}
+else
+{
+    <h3>Usuarios:</h3>
+
+    @if (!Sesion.EsAdminSistema())
+    {
+        <p class="text-danger">Acceso denegado. Solo disponible para administradores del sistema.</p>
+    }
+    else
+    {
+        @if (mostrarExito)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @mensajeExito
+                <button type="button" class="btn-close" data-bs-dismiss="alert"
+                        @onclick="() => mostrarExito = false"></button>
+            </div>
+        }
+
+        <div class="d-flex justify-content-end mb-3">
+            <button class="btn btn-primary" @onclick="MostrarFormularioCrearUsuario">
+                <i class="bi bi-plus-circle"></i>
+                Crear usuario
+            </button>
+        </div>
+
+        @if (mostrarError)
+        {
+            <div class="alert alert-danger" role="alert">@errorMensaje</div>
+        }
+
+        @if (mostrarFormCrear)
+        {
+            <EditForm Model="nuevoUsuario" OnValidSubmit="CrearUsuario">
+                <DataAnnotationsValidator/>
+                <div class="card mb-4">
+                    <div class="card-header"><strong>Nuevo Usuario</strong></div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label>Nombre</label>
+                            <InputText class="form-control" @bind-Value="nuevoUsuario.Nombre" @oninput="OcultarError"
+                                       placeholder="Ej: Juan"/>
+                        </div>
+                        <div class="mb-3">
+                            <label>Apellido</label>
+                            <InputText class="form-control" @bind-Value="nuevoUsuario.Apellido" @oninput="OcultarError"
+                                       placeholder="Ej: Pérez"/>
+                        </div>
+                        <div class="mb-3">
+                            <label>Fecha de nacimiento</label>
+                            <input type="date" class="form-control" @bind="nuevoUsuario.FechaNacimiento"/>
+                        </div>
+                        <div class="mb-3">
+                            <label>Email</label>
+                            <InputText class="form-control" @bind-Value="nuevoUsuario.Email" @oninput="OcultarError"
+                                       placeholder="Ej: juanperez2005@mail.com"/>
+                        </div>
+                        <div class="mb-3">
+                            <label>Contraseña</label>
+                            <div class="input-group">
+                                <InputText class="form-control" type="password" @bind-Value="nuevoUsuario.Contrasena"
+                                           @oninput="OcultarError" placeholder="Ej: Contra$ena123"/>
+                                <button type="button" class="btn btn-secondary" @onclick="AutogenerarContrasena">
+                                    Autogenerar contraseña
+                                </button>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(nuevoUsuario.Contrasena) && ContrasenaEsValida(nuevoUsuario.Contrasena))
+                            {
+                                <div class="alert alert-success mt-3">
+                                    La nueva contraseña generada es: <strong>@nuevoUsuario.Contrasena</strong>. Se
+                                    aplicará al crear el usuario.
+                                </div>
+                            }
+                        </div>
+                        <div>
+                            <button class="btn btn-success" @onclick="CrearUsuario">Crear</button>
+                            <button class="btn btn-secondary ms-2" type="button" @onclick="CancelarCrearUsuario">
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </EditForm>
+        }
+
+
+        @if (mostrarErrorEditar)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @errorMensajeEditar
+                <button type="button" class="btn-close" data-bs-dismiss="alert"
+                        @onclick="() => mostrarErrorEditar = false" aria-label="Cerrar"></button>
+            </div>
+        }
+
+        @if (mostrarFormEditar && Sesion.UsuarioLogueado.EsAdministradorSistema)
+        {
+            <EditForm Model="usuarioAEditar" OnValidSubmit="GuardarCambiosUsuario">
+                <DataAnnotationsValidator/>
+                <div class="card mb-4">
+                    <div class="card-header"><strong>Editar Usuario</strong></div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label>Nombre</label>
+                            <InputText class="form-control" @bind-Value="usuarioAEditar.Nombre" disabled/>
+                        </div>
+                        <div class="mb-3">
+                            <label>Apellido</label>
+                            <InputText class="form-control" @bind-Value="usuarioAEditar.Apellido" disabled/>
+                        </div>
+                        <div class="mb-3">
+                            <label>Fecha de nacimiento</label>
+                            <p class="form-control-plaintext">@usuarioAEditar.FechaNacimiento.ToString("dd/MM/yyyy")</p>
+                        </div>
+                        <div class="mb-3">
+                            <label>Email</label>
+                            <InputText class="form-control" @bind-Value="usuarioAEditar.Email" disabled/>
+                        </div>
+                        @if (!usuarioOriginal.EsAdministradorSistema)
+                        {
+                            <div class="mb-3">
+                                <label>Contraseña</label>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-secondary" type="button" @onclick="MostrarModalAutogenerar">
+                                        Autogenerar
+                                    </button>
+                                    <button class="btn btn-secondary" type="button"
+                                            @onclick="MostrarModalCambiarContrasena">Cambiar
+                                    </button>
+                                    <button class="btn btn-secondary" type="button" @onclick="MostrarModalReiniciar">
+                                        Reiniciar
+                                    </button>
+                                </div>
+
+                                @if (mostrarExitoContrasenaModal && !string.IsNullOrEmpty(mensajeExitoContrasenaModal))
+                                {
+                                    <div class="alert alert-success mt-2">@mensajeExitoContrasenaModal</div>
+                                }
+
+                                @if (!mostrarExitoContrasenaModal && ContrasenaEsValida(usuarioAEditar.ContrasenaAutogenerada))
+                                {
+                                    <div class="alert alert-success mt-3">
+                                        La nueva contraseña generada es:
+                                        <strong>@usuarioAEditar.ContrasenaAutogenerada</strong>. Se aplicará al guardar
+                                        los cambios del usuario.
+                                    </div>
+                                }
+                            </div>
+                        }
+                        <div class="mb-3">
+                            <label>Roles</label><br/>
+                            <InputCheckbox @bind-Value="usuarioAEditar.EsAdministradorSistema"
+                                           disabled="@usuarioOriginal.EsAdministradorSistema"/>
+                            <label class="me-3">Administrador de sistema</label>
+                            <InputCheckbox @bind-Value="usuarioAEditar.EsAdministradorProyecto"
+                                           disabled="@usuarioOriginal.EstaAdministrandoUnProyecto"/>
+                            <label class="me-3">Administrador de proyecto</label>
+                        </div>
+                        <div>
+                            <button class="btn btn-success" @onclick="GuardarCambiosUsuario">Guardar cambios</button>
+
+                            @if (!usuarioOriginal.EsAdministradorSistema)
+                            {
+                                <button class="btn btn-danger ms-2" type="button"
+                                        @onclick="MostrarModalEliminarUsuario">Eliminar usuario
+                                </button>
+                            }
+
+                            <button class="btn btn-secondary ms-2" type="button" @onclick="CancelarEditarUsuario">
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </EditForm>
+        }
+
+        @if (mostrarModalCambiarContrasena)
+        {
+            <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Cambiar Contraseña</h5>
+                            <button type="button" class="btn-close" @onclick="CancelarCambioContrasena"></button>
+                        </div>
+                        <div class="modal-body">
+                            <label>Nueva contraseña:</label>
+                            <InputText class="form-control" @bind-Value="nuevaContrasenaManual" type="password"
+                                       @oninput="OcultarErrorModalContrasena"/>
+                            @if (mostrarExitoContrasenaModal)
+                            {
+                                <div class="alert alert-success mt-3">@mensajeExitoContrasenaModal</div>
+                            }
+                            @if (mostrarErrorContrasenaModal)
+                            {
+                                <div class="alert alert-danger mt-3">@errorContrasenaModal</div>
+                            }
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" @onclick="CancelarCambioContrasena">Cancelar</button>
+                            <button class="btn btn-primary" @onclick="ConfirmarCambioContrasena">Guardar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+
+        @if (ControladorUsuarios.ObtenerTodos().Count == 0)
+        {
+            <p>No hay usuarios.</p>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Apellido</th>
+                    <th>Email</th>
+                    <th>Rol</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (UsuarioListarDTO usuario in ControladorUsuarios.ObtenerTodos())
+                {
+                    <tr>
+                        <td>@usuario.Nombre</td>
+                        <td>@usuario.Apellido</td>
+                        <td>@usuario.Email</td>
+                        <td>
+                            @if (usuario.EsAdministradorSistema)
+                            {
+                                <span class="badge bg-warning text-white">Administrador de sistema</span>
+                            }
+                            @if (usuario.EsAdministradorProyecto)
+                            {
+                                <span class="badge bg-info text-white ms-1">Administrador de proyecto</span>
+                            }
+                            @if (usuario.EsLider)
+                            {
+                                <span class="badge bg-success text-white ms-1">Líder de @usuario.CantidadProyectosLiderando proyecto(s).</span>
+                            }
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => EditarUsuario(usuario.Id)">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    }
+}
+
+@if (mostrarModalEliminarUsuario)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirmar eliminación</h5>
+                    <button class="btn-close" @onclick="CancelarEliminarUsuario"></button>
+                </div>
+                <div class="modal-body">
+                    <p>
+                        ¿Está seguro que desea eliminar al usuario
+                        <strong>@usuarioAEditar.Nombre @usuarioAEditar.Apellido</strong>
+                        (@usuarioAEditar.Email)?
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-danger" @onclick="ConfirmarEliminarUsuario">Eliminar</button>
+                    <button class="btn btn-secondary" @onclick="CancelarEliminarUsuario">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (mostrarModalAutogenerar)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirmar autogenerar contraseña</h5>
+                    <button class="btn-close" @onclick="CancelarConfirmacion"></button>
+                </div>
+                <div class="modal-body">
+                    <p>
+                        ¿Está seguro que desea autogenerar una nueva contraseña?
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-success" @onclick="ConfirmarAutogenerar">Confirmar</button>
+                    <button class="btn btn-secondary" @onclick="CancelarConfirmacion">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (mostrarModalReiniciar)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirmar reinicio de contraseña</h5>
+                    <button class="btn-close" @onclick="CancelarConfirmacion"></button>
+                </div>
+                <div class="modal-body">
+                    <p>
+                        ¿Está seguro que desea reiniciar la contraseña?
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-success" @onclick="ConfirmarReiniciar">Confirmar</button>
+                    <button class="btn btn-secondary" @onclick="CancelarConfirmacion">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool mostrarFormCrear = false;
+
+    private bool mostrarExito = false;
+    private string mensajeExito = "";
+
+    private UsuarioDTO usuarioOriginal;
+    private bool mostrarFormEditar = false;
+    private bool mostrarError = false;
+    private string errorMensaje;
+    private UsuarioDTO nuevoUsuario = new UsuarioDTO();
+    private UsuarioEditarDTO usuarioAEditar = new UsuarioEditarDTO();
+    private int idUsuarioEditando;
+    private bool mostrarErrorEditar = false;
+    private string errorMensajeEditar;
+
+    private bool mostrarModalCambiarContrasena = false;
+    private string nuevaContrasenaManual = "";
+
+    private string errorContrasenaModal;
+    private bool mostrarErrorContrasenaModal = false;
+    private bool mostrarExitoContrasenaModal = false;
+
+    private string mensajeExitoContrasenaModal = "";
+
+    private bool mostrarModalEliminarUsuario = false;
+
+    private bool mostrarModalAutogenerar = false;
+    private bool mostrarModalReiniciar = false;
+
+    private bool sesionCargada = false;
+
+    private void MostrarFormularioCrearUsuario()
+    {
+        mostrarExito = false;
+        mensajeExito = "";
+        mostrarFormCrear = true;
+        nuevoUsuario = new UsuarioDTO();
+    }
+
+    private void CancelarCrearUsuario()
+    {
+        mostrarFormCrear = false;
+        mostrarError = false;
+    }
+
+    private void CrearUsuario()
+    {
+        mostrarError = false;
+        errorMensaje = "";
+
+        List<ValidationResult> errores = ValidarModelo(nuevoUsuario);
+        if (errores.Any())
+        {
+            errorMensaje = string.Join(" ", errores.Select(e => e.ErrorMessage));
+            mostrarError = true;
+            return;
+        }
+
+        if (!ContrasenaEsValida(nuevoUsuario.Contrasena))
+        {
+            errorMensaje = "La contraseña debe tener al menos 8 caracteres, una minúscula, una mayúscula, un número y un carácter especial.";
+            mostrarError = true;
+            return;
+        }
+
+        try
+        {
+            ControladorUsuarios.CrearYAgregarUsuario(Sesion.UsuarioLogueado, nuevoUsuario);
+            mensajeExito = $"Usuario creado exitosamente: {nuevoUsuario.Nombre} {nuevoUsuario.Apellido} ({nuevoUsuario.Email})";
+            mostrarExito = true;
+            mostrarFormCrear = false;
+            mostrarError = false;
+        }
+        catch (Exception ex)
+        {
+            errorMensaje = $"Error al crear usuario: {ex.Message}";
+            mostrarError = true;
+        }
+    }
+
+    private void OcultarError(ChangeEventArgs e)
+    {
+        mostrarError = false;
+    }
+
+    private List<ValidationResult> ValidarModelo(object modelo)
+    {
+        List<ValidationResult> resultados = new List<ValidationResult>();
+        ValidationContext contexto = new ValidationContext(modelo, serviceProvider: null, items: null);
+        Validator.TryValidateObject(modelo, contexto, resultados, validateAllProperties: true);
+        if (modelo is UsuarioDTO usuario)
+        {
+            var edad = CalcularEdad(usuario.FechaNacimiento);
+            if (edad < 18 || edad > 100)
+            {
+                resultados.Add(new ValidationResult("La edad debe estar entre 18 y 100 años.", new[] { nameof(usuario.FechaNacimiento) }));
+            }
+        }
+
+        return resultados;
+    }
+
+    private int CalcularEdad(DateTime fechaNacimiento)
+    {
+        DateTime hoy = DateTime.Today;
+        int edad = hoy.Year - fechaNacimiento.Year;
+        if (fechaNacimiento.Date > hoy.AddYears(-edad)) edad--;
+        return edad;
+    }
+
+    private void EditarUsuario(int idUsuario)
+    {
+        UsuarioDTO usuario = ControladorUsuarios.ObtenerUsuarioPorId(idUsuario);
+
+        if (usuario != null)
+        {
+            usuarioAEditar = new UsuarioEditarDTO()
+            {
+                Id = usuario.Id,
+                Nombre = usuario.Nombre,
+                Apellido = usuario.Apellido,
+                FechaNacimiento = usuario.FechaNacimiento,
+                Email = usuario.Email,
+                EsAdministradorSistema = usuario.EsAdministradorSistema,
+                EsAdministradorProyecto = usuario.EsAdministradorProyecto
+            };
+            usuarioOriginal = usuario;
+            idUsuarioEditando = usuario.Id;
+            mostrarFormEditar = true;
+            mostrarExitoContrasenaModal = false;
+            mensajeExitoContrasenaModal = "";
+        }
+    }
+
+    private void OcultarErrorModalContrasena(ChangeEventArgs e)
+    {
+        mostrarErrorContrasenaModal = false;
+    }
+
+    private async Task GuardarCambiosUsuario()
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(usuarioAEditar.ContrasenaAutogenerada))
+            {
+                if (usuarioAEditar.ContrasenaAutogenerada == "RESET")
+                {
+                    ControladorUsuarios.ReiniciarContrasena(Sesion.UsuarioLogueado, idUsuarioEditando);
+                }
+                else
+                {
+                    ControladorUsuarios.ModificarContrasena(Sesion.UsuarioLogueado, idUsuarioEditando, usuarioAEditar.ContrasenaAutogenerada);
+                }
+            }
+
+            if (usuarioAEditar.EsAdministradorProyecto && !usuarioOriginal.EsAdministradorProyecto)
+            {
+                ControladorUsuarios.AsignarAdministradorProyecto(Sesion.UsuarioLogueado, idUsuarioEditando);
+            }
+            else if (!usuarioAEditar.EsAdministradorProyecto && usuarioOriginal.EsAdministradorProyecto)
+            {
+                ControladorUsuarios.DesasignarAdministradorProyecto(Sesion.UsuarioLogueado, idUsuarioEditando);
+            }
+
+            if (usuarioAEditar.EsAdministradorSistema && !usuarioOriginal.EsAdministradorSistema)
+            {
+                ControladorUsuarios.AgregarAdministradorSistema(Sesion.UsuarioLogueado, idUsuarioEditando);
+            }
+
+            if (Sesion.UsuarioLogueado.Id == idUsuarioEditando)
+            {
+                await Sesion.ActualizarSesion();
+            }
+
+            mostrarFormEditar = false;
+            mostrarExitoContrasenaModal = false;
+            mensajeExitoContrasenaModal = "";
+            usuarioOriginal = null;
+            usuarioAEditar = null;
+            mensajeExito = "Usuario modificado exitosamente.";
+            mostrarExito = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMensajeEditar = $"Error al editar usuario: {ex.Message}";
+            mostrarErrorEditar = true;
+        }
+    }
+
+    private void EliminarUsuario()
+    {
+        try
+        {
+            ControladorUsuarios.EliminarUsuario(Sesion.UsuarioLogueado, idUsuarioEditando);
+
+            mostrarFormEditar = false;
+            mensajeExito = "Usuario eliminado exitosamente.";
+            mostrarExito = true;
+        }
+        catch (ExcepcionPermisos ex)
+        {
+            errorMensajeEditar = "No se puede eliminar al usuario, es miembro de proyectos. Para eliminarlo debe eliminarlo previamente de los proyectos que tiene asignados.";
+            mostrarErrorEditar = true;
+        }
+        catch (Exception ex)
+        {
+            errorMensajeEditar = $"Error al eliminar usuario: {ex.Message}";
+            mostrarErrorEditar = true;
+        }
+    }
+
+    private void MostrarModalEliminarUsuario()
+    {
+        mostrarModalEliminarUsuario = true;
+    }
+
+    private void CancelarEliminarUsuario()
+    {
+        mostrarModalEliminarUsuario = false;
+    }
+
+    private void ConfirmarEliminarUsuario()
+    {
+        EliminarUsuario();
+        mostrarModalEliminarUsuario = false;
+    }
+
+    private void CancelarEditarUsuario()
+    {
+        mostrarFormEditar = false;
+        mostrarErrorEditar = false;
+        mostrarExitoContrasenaModal = false;
+        mensajeExitoContrasenaModal = "";
+    }
+
+    private void ReiniciarContrasena()
+    {
+        try
+        {
+            usuarioAEditar.ContrasenaAutogenerada = "RESET"; // Para que sepa que tiene que reiniciar
+            mensajeExitoContrasenaModal = "La contraseña se reiniciará al guardar los cambios del usuario.";
+            mostrarExitoContrasenaModal = true;
+        }
+        catch (Exception ex)
+        {
+            errorMensajeEditar = $"Error al reiniciar contraseña: {ex.Message}";
+            mostrarErrorEditar = true;
+        }
+    }
+
+    private void AutogenerarContrasena()
+    {
+        try
+        {
+            string nueva = ControladorUsuarios.AutogenerarContrasenaValida();
+            if (mostrarFormCrear)
+            {
+                nuevoUsuario.Contrasena = nueva;
+            }
+            else if (mostrarFormEditar)
+            {
+                usuarioAEditar.ContrasenaAutogenerada = nueva;
+                mensajeExitoContrasenaModal = $"La nueva contraseña generada es: {nueva} . Se cambiará al guardar cambios.";
+                mostrarExitoContrasenaModal = true;
+            }
+
+            mostrarErrorEditar = false;
+        }
+        catch (Exception ex)
+        {
+            errorMensajeEditar = $"Error inesperado: {ex.Message}";
+            mostrarErrorEditar = true;
+        }
+    }
+
+    private void MostrarModalCambiarContrasena()
+    {
+        nuevaContrasenaManual = "";
+        mostrarErrorContrasenaModal = false;
+        mostrarExitoContrasenaModal = false;
+        usuarioAEditar.ContrasenaAutogenerada = "";
+        mostrarModalCambiarContrasena = true;
+    }
+
+    private void CancelarCambioContrasena()
+    {
+        mostrarModalCambiarContrasena = false;
+        nuevaContrasenaManual = "";
+    }
+
+    private void ConfirmarCambioContrasena()
+    {
+        mostrarErrorEditar = false;
+        errorMensajeEditar = "";
+
+        if (!ContrasenaEsValida(nuevaContrasenaManual))
+        {
+            errorContrasenaModal = "La contraseña debe tener al menos 8 caracteres, una minúscula, una mayúscula, un número y un carácter especial.";
+            mostrarErrorContrasenaModal = true;
+            return;
+        }
+
+        try
+        {
+            usuarioAEditar.ContrasenaAutogenerada = nuevaContrasenaManual;
+            mensajeExitoContrasenaModal = "La nueva contraseña se aplicará al guardar los cambios del usuario.";
+            mostrarExitoContrasenaModal = true;
+            mostrarModalCambiarContrasena = false;
+            nuevaContrasenaManual = "";
+        }
+        catch (Exception ex)
+        {
+            errorMensajeEditar = $"Error al modificar contraseña: {ex.Message}";
+            mostrarErrorEditar = true;
+        }
+    }
+
+    private bool ContrasenaEsValida(string contrasena)
+    {
+        if (string.IsNullOrWhiteSpace(contrasena)) return false;
+
+        return contrasena.Length >= 8
+               && contrasena.Any(char.IsLower)
+               && contrasena.Any(char.IsUpper)
+               && contrasena.Any(char.IsDigit)
+               && contrasena.Any(c => !char.IsLetterOrDigit(c));
+    }
+
+    private void MostrarModalAutogenerar()
+    {
+        mostrarModalAutogenerar = true;
+        mostrarExitoContrasenaModal = false;
+    }
+
+    private void MostrarModalReiniciar()
+    {
+        mostrarModalReiniciar = true;
+        mostrarExitoContrasenaModal = false;
+    }
+
+    private void CancelarConfirmacion()
+    {
+        mostrarModalAutogenerar = false;
+        mostrarModalReiniciar = false;
+    }
+
+    private void ConfirmarAutogenerar()
+    {
+        AutogenerarContrasena();
+        mostrarModalAutogenerar = false;
+    }
+
+    private void ConfirmarReiniciar()
+    {
+        ReiniciarContrasena();
+        mostrarModalReiniciar = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sesionCargada)
+        {
+            bool haySesionActiva = await Sesion.HaySesionActiva();
+
+            if (!haySesionActiva)
+            {
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                await Sesion.ActualizarSesion();
+                sesionCargada = true;
+                StateHasChanged(); // Vuelve a renderizar para mostrar la sesión activa
+            }
+        }
+    }
+
+}

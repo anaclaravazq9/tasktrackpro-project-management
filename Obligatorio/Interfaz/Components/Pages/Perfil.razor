@@ -1,0 +1,324 @@
+@page "/perfil"
+@using Controladores
+@using DTOs
+@using Excepciones
+@using Interfaz.ServiciosInterfaz
+@inject LogicaSesion Sesion
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+@inject ControladorUsuarios ControladorUsuarios
+
+@if (Sesion.UsuarioLogueado is not null)
+{
+    <div class="card shadow border-0 mb-5 mx-auto" style="max-width: 700px;">
+        <div class="card-body">
+            <div class="mb-4 border-bottom pb-3 d-flex align-items-center position-relative">
+                <i class="bi bi-person-circle fs-1 text-black me-3"></i>
+                <h4 class="mb-0 text-primary-emphasis">Perfil de Usuario</h4>
+            </div>
+
+            <div class="position-absolute top-0 end-0 mt-3 me-3">
+                <button class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1"
+                        @onclick="MostrarModalEliminar">
+                    <i class="bi bi-trash"></i> Eliminar usuario
+                </button>
+            </div>
+
+            <dl class="row">
+                <dt class="col-sm-4 text-muted">Nombre</dt>
+                <dd class="col-sm-8 fw-semibold">@Sesion.UsuarioLogueado?.Nombre</dd>
+
+                <dt class="col-sm-4 text-muted">Apellido</dt>
+                <dd class="col-sm-8 fw-semibold">@Sesion.UsuarioLogueado?.Apellido</dd>
+
+                <dt class="col-sm-4 text-muted">Fecha de nacimiento</dt>
+                <dd class="col-sm-8 fw-semibold">@Sesion.UsuarioLogueado?.FechaNacimiento.ToShortDateString()</dd>
+
+                <dt class="col-sm-4 text-muted">Email</dt>
+                <dd class="col-sm-8 fw-semibold">@Sesion.UsuarioLogueado?.Email</dd>
+
+                <dt class="col-sm-4 text-muted">Roles</dt>
+                <dd class="col-sm-8">
+                    @if (Sesion.EsAdminSistema())
+                    {
+                        <span class="badge bg-warning text-white">Administrador de sistema</span>
+                    }
+                    @if (Sesion.EsAdminProyecto())
+                    {
+                        <span class="badge bg-info text-white ms-1">Administrador de proyecto</span>
+                    }
+                    @if (Sesion.UsuarioLogueado.EsLider)
+                    {
+                        <span class="badge bg-success text-white ms-1">Líder de @Sesion.UsuarioLogueado.CantidadProyectosLiderando proyecto(s).</span>
+                    }
+                    @if (!Sesion.EsAdminSistema() && !Sesion.EsAdminProyecto() && !Sesion.EsLiderProyecto())
+                    {
+                        <span class="text-muted">Sin rol administrativo</span>
+                    }
+                </dd>
+            </dl>
+
+            <div class="mt-4 d-flex justify-content-center gap-3">
+                <button class="btn btn-outline-dark px-4 py-2 d-flex align-items-center gap-2" style="min-width: 200px;"
+                        @onclick="MostrarVentanaEmergenteCambiar">
+                    <i class="bi bi-shield-lock"></i> Cambiar contraseña
+                </button>
+                <button class="btn btn-outline-dark px-4 py-2 d-flex align-items-center gap-2" style="min-width: 200px;"
+                        @onclick="MostrarVentanaEmergenteReinciar">
+                    <i class="bi bi-arrow-repeat"></i> Reiniciar contraseña
+                </button>
+            </div>
+
+            <div class="mt-5 d-flex justify-content-between">
+                <button class="btn btn-outline-secondary" @onclick="IrAInicio">⬅ Inicio</button>
+                <button class="btn btn-outline-danger" @onclick="CerrarSesion">Cerrar sesión</button>
+            </div>
+        </div>
+    </div>
+}
+<!-- Ventana emergente (modal) para cambiar contraseña -->
+<div class="modal fade @(mostrarVentanaEmergenteCambiar ? "show d-block" : "")" tabindex="-1"
+     style="background-color: rgba(0,0,0,0.5); position: fixed; top: 0; left: 0; width: 100%; height: 100%;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title">Cambiar Contraseña</h5>
+                <button type="button" class="btn-close btn-close-white"
+                        @onclick="CerrarVentanaEmergenteCambiar"></button>
+            </div>
+
+            <EditForm Model="modeloCambio" OnValidSubmit="CambiarContrasena" OnInvalidSubmit="MostrarErroresValidacion">
+                <DataAnnotationsValidator/>
+                <ValidationSummary class="d-none"/>
+
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(mensaje))
+                    {
+                        <div class="alert alert-info mt-2">@mensaje</div>
+                    }
+
+                    <div class="mb-3 position-relative">
+                        <label for="nuevaContrasena" class="form-label">Nueva Contraseña</label>
+                        <InputText id="nuevaContrasena"
+                                   class="form-control pe-5"
+                                   @bind-Value="modeloCambio.NuevaContrasena"
+                                   type="password"
+                                   placeholder="Ingrese su nueva contraseña"/>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarVentanaEmergenteCambiar">Cancelar
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+
+<!-- Ventana emergente (modal) para reiniciar contraseña -->
+<div class="modal fade @(mostrarVentanaEmergenteReinciar ? "show d-block" : "")" tabindex="-1"
+     style="background-color: rgba(0,0,0,0.5); position: fixed; top: 0; left: 0; width: 100%; height: 100%;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title">Reiniciar Contraseña</h5>
+                <button type="button" class="btn-close btn-close-white"
+                        @onclick="CerrarVentanaEmergenteReinciar"></button>
+            </div>
+
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(mensaje))
+                {
+                    <div class="alert alert-info mt-2">@mensaje</div>
+                }
+
+                <p class="mb-4">¿Está seguro que desea reiniciar su contraseña? Se le enviará una notificación con la
+                    nueva contraseña.</p>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <button class="btn btn-secondary" @onclick="CerrarVentanaEmergenteReinciar">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="ReiniciarContrasena">Confirmar Reinicio</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (mostrarModalEliminar)
+{
+    <div class="modal fade show d-block" tabindex="-1"
+         style="background-color: rgba(0,0,0,0.5); position: fixed; top: 0; left: 0; width: 100%; height: 100%;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow-lg">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Confirmar eliminación</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CancelarEliminarUsuario"></button>
+                </div>
+                <div class="modal-body">
+                    <p>¿Está seguro que desea eliminar su cuenta? Esta acción no se puede deshacer.</p>
+                    @if (!string.IsNullOrEmpty(errorEliminar))
+                    {
+                        <div class="alert alert-danger mt-2">@errorEliminar</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-danger" @onclick="ConfirmarEliminarUsuario">Eliminar</button>
+                    <button class="btn btn-secondary" @onclick="CancelarEliminarUsuario">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+
+
+@code {
+    private bool sesionCargada = false;
+    private bool mostrarVentanaEmergenteCambiar = false;
+    private bool mostrarVentanaEmergenteReinciar = false;
+    private string mensaje;
+    private ModeloCambioContraseña modeloCambio = new ModeloCambioContraseña();
+    private bool mostrarModalEliminar = false;
+    private string errorEliminar = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sesionCargada)
+        {
+            bool haySesionActiva = await Sesion.HaySesionActiva();
+
+            if (!haySesionActiva)
+            {
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                StateHasChanged(); // Vuelve a renderizar para mostrar la sesión activa
+            }
+
+            sesionCargada = true;
+        }
+    }
+
+    private async Task CerrarSesion()
+    {
+        await Sesion.LogOut();
+        Navigation.NavigateTo("/");
+    }
+
+    private void IrAInicio()
+    {
+        Navigation.NavigateTo("/inicio");
+    }
+
+    private void MostrarVentanaEmergenteCambiar()
+    {
+        mostrarVentanaEmergenteCambiar = true;
+        mensaje = String.Empty;
+    }
+
+    private void MostrarVentanaEmergenteReinciar()
+    {
+        mostrarVentanaEmergenteReinciar = true;
+        mensaje = String.Empty;
+    }
+
+    private void CerrarVentanaEmergenteCambiar()
+    {
+        mostrarVentanaEmergenteCambiar = false;
+    }
+
+    private void CerrarVentanaEmergenteReinciar()
+    {
+        mostrarVentanaEmergenteReinciar = false;
+    }
+
+    private async Task CambiarContrasena()
+    {
+        try
+        {
+            UsuarioDTO usuario = Sesion.UsuarioLogueado;
+            ControladorUsuarios.ModificarContrasena(usuario, usuario.Id, modeloCambio.NuevaContrasena);
+            mensaje = "Contraseña cambiada con éxito.";
+            await Sesion.ActualizarSesion();
+            modeloCambio = new ModeloCambioContraseña(); // Limpiar el modelo
+        }
+        catch (Exception e)
+        {
+            mensaje = $"Error: {e.Message}";
+        }
+    }
+
+    private async Task ReiniciarContrasena()
+    {
+        try
+        {
+            UsuarioDTO usuario = Sesion.UsuarioLogueado;
+            ControladorUsuarios.ReiniciarContrasena(usuario, usuario.Id);
+            mensaje = "Contraseña reiniciada con éxito. Se ha enviado una notificación con la nueva contraseña.";
+            await Sesion.ActualizarSesion();
+        }
+        catch (Exception e)
+        {
+            mensaje = $"Error: {e.Message}";
+        }
+    }
+
+    private void MostrarModalEliminar()
+    {
+        mostrarModalEliminar = true;
+        errorEliminar = "";
+    }
+
+    private void CancelarEliminarUsuario()
+    {
+        mostrarModalEliminar = false;
+        errorEliminar = "";
+    }
+
+    private async Task ConfirmarEliminarUsuario()
+    {
+        try
+        {
+            try
+            {
+                if (Sesion.UsuarioLogueado.CantidadProyectosAsignados > 0)
+                {
+                    throw new ExcepcionUsuario("El usuario no puede eliminarse porque está asignado a uno o más proyectos.");
+                }
+            }
+            catch (ExcepcionUsuario ex)
+            {
+                errorEliminar = "No se puede eliminar al usuario, es miembro de proyectos. Para eliminarlo debe eliminarlo previamente de los proyectos que tiene asignados.";
+                return;
+            }
+
+            try
+            {
+                ControladorUsuarios.ValidarUsuarioNoEsAdministradorInicial(Sesion.UsuarioLogueado.Id);
+            }
+            catch (ExcepcionPermisos ex)
+            {
+                errorEliminar = "No se puede eliminar al usuario, es el primer administrador.";
+                return;
+            }
+
+            ControladorUsuarios.EliminarUsuario(Sesion.UsuarioLogueado, Sesion.UsuarioLogueado.Id);
+            await CerrarSesion();
+        }
+        catch
+        {
+            errorEliminar = "Ocurrió un error inesperado al intentar eliminar el usuario.";
+        }
+    }
+
+    private void MostrarErroresValidacion(EditContext editContext)
+    {
+        var errores = editContext.GetValidationMessages();
+        mensaje = string.Join("<br/>", errores);
+    }
+
+}

@@ -1,0 +1,65 @@
+@page "/"
+@rendermode InteractiveServer
+@using DTOs
+@using Interfaz.ServiciosInterfaz
+@inject LogicaSesion Sesion
+@inject NavigationManager Navigation
+
+<div class="container vh-100 d-flex justify-content-center align-items-center">
+    <div class="row w-100 justify-content-center">
+        <div class="col-12 col-md-6 col-lg-5">
+            <div class="card shadow-lg border-0">
+                <div class="card-body p-5">
+
+                    <div class="text-center mb-4">
+                        <h2 class="fw-bold">Iniciar sesión</h2>
+                    </div>
+
+                    @if (loginFallido)
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            <strong>Error:</strong> Usuario o contraseña incorrectos.
+                        </div>
+                    }
+
+                    <EditForm Model="modeloSesion" OnSubmit="Login" FormName="loginForm">
+                        <div class="form-group mb-4">
+                            <label for="email" class="form-label fs-6">Email</label>
+                            <InputText id="email" class="form-control form-control-lg"
+                                       @bind-Value="modeloSesion.Email"/>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label for="contraseña" class="form-label fs-6">Contraseña</label>
+                            <InputText id="contraseña" type="password" class="form-control form-control-lg"
+                                       @bind-Value="modeloSesion.Contraseña"/>
+                        </div>
+
+                        <button type="submit" class="btn btn-dark w-100 btn-lg">
+                            Ingresar
+                        </button>
+                    </EditForm>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@code {
+    private ModeloSesion modeloSesion = new ModeloSesion();
+    private bool loginFallido;
+
+    private async Task Login()
+    {
+        loginFallido = !await Sesion.Login(modeloSesion.Email, modeloSesion.Contraseña);
+
+        if (!loginFallido)
+        {
+            StateHasChanged();
+            Navigation.NavigateTo("/inicio");
+        }
+    }
+
+}

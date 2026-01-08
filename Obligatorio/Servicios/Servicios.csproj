@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BCrypt.Net-Next" Version="4.0.3"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Dominio\Dominio.csproj"/>
+        <ProjectReference Include="..\DTOs\DTOs.csproj"/>
+        <ProjectReference Include="..\IServicios\IServicios.csproj" />
+        <ProjectReference Include="..\Repositorios\Repositorios.csproj"/>
+        <ProjectReference Include="..\Utilidades\Utilidades.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Dominio\Dominio.csproj"/>
+    </ItemGroup>
+
+</Project>

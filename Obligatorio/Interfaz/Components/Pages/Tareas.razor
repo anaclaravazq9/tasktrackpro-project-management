@@ -1,0 +1,1223 @@
+@page "/proyecto/{id:int}/tareas"
+@using Interfaz.ServiciosInterfaz
+@inject ControladorProyectos ControladorProyectos
+@inject ControladorTareas ControladorTareas
+@inject ControladorUsuarios ControladorUsuarios
+@inject ControladorRecursos ControladorRecursos
+@inject LogicaSesion Sesion
+@inject NavigationManager Navigator
+@rendermode InteractiveServer
+@using System.Linq
+@using Controladores
+@using Excepciones
+@using DTOs
+
+
+@if (Sesion.UsuarioLogueado == null || !sesionCargada)
+{
+}
+else
+{
+    @if (proyecto == null)
+    {
+        <p>No se encontró el proyecto</p>
+    }
+    else
+    {
+        <h3>Tareas</h3>
+        @if (ControladorProyectos.EsAdministradorDeProyecto(Sesion.UsuarioLogueado, proyecto.Id))
+        {
+            <div class="text-center mb-3">
+                <button class="btn btn-primary btn text-white d-flex align-items-center gap-2"
+                        @onclick="() => MostrarVentanaCreacion()">
+                    <i class="bi bi-plus-circle"></i> Crear tarea
+                </button>
+            </div>
+        }
+
+        @if (proyecto.Tareas.Count == 0 && (ControladorProyectos.EsAdministradorDeProyecto(Sesion.UsuarioLogueado, proyecto.Id) || Sesion.EsAdminSistema() || ControladorProyectos.EsLiderDeProyecto(Sesion.UsuarioLogueado, proyecto.Id)))
+        {
+            <p>Aún no hay tareas en el proyecto.</p>
+        }
+        else if (proyecto.Tareas.Count > 0 && ControladorProyectos.EsMiembroDeProyecto(Sesion.UsuarioLogueado.Id, proyecto.Id) && !proyecto.Tareas.Any(t => t.UsuariosAsignados.Any(u => u.Id == Sesion.UsuarioLogueado.Id)))
+        {
+            <p>Aún no tienes tareas asignadas</p>
+        }
+
+        @if (proyecto.Tareas.Count > 0)
+        {
+            @foreach (var tarea in proyecto.Tareas)
+            {
+                @if (ControladorProyectos.EsAdministradorDeProyecto(Sesion.UsuarioLogueado, proyecto.Id) || ControladorTareas.EsMiembroDeTarea(Sesion.UsuarioLogueado, tarea.Id, proyecto.Id) || Sesion.EsAdminSistema() || ControladorProyectos.EsLiderDeProyecto(Sesion.UsuarioLogueado, proyecto.Id))
+                {
+                    var collapseId = $"collapseTarea{tarea.Id}";
+
+                    <div class="card shadow-sm mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span class="fw-bold fs-5">@tarea.Titulo</span>
+                            <button class="btn btn-sm btn-outline-dark" type="button" data-bs-toggle="collapse"
+                                    data-bs-target=@($"#{collapseId}")>
+                                Más información
+                            </button>
+                        </div>
+                        <div class="collapse" id=@collapseId>
+                            <div class="card-body">
+                                <p><strong>Descripción:</strong> @tarea.Descripcion</p>
+                                <p><strong>Estado:</strong> @FormatearEstado(tarea.Estado)</p>
+                                @if (tarea.Dependencias.Count > 0)
+                                {
+                                    <p><strong>Depende
+                                            de:</strong> @string.Join(", ", tarea.Dependencias.Select(d => $"{d.TareaPrevia.Titulo} ({d.Tipo})"))
+                                    </p>
+                                }
+                                else
+                                {
+                                    <p><strong>No tiene dependencias</strong></p>
+                                }
+                                @if (tarea.RecursosNecesarios.Count > 0)
+                                {
+                                    <p><strong>Recursos
+                                            necesarios:</strong> @string.Join(", ", tarea.RecursosNecesarios.Select(rn => rn.Recurso.Nombre))
+                                    </p>
+                                }
+                                else
+                                {
+                                    <p><strong>No tiene recursos necesarios</strong></p>
+                                }
+                                <p><strong>Duración:</strong> @tarea.DuracionEnDias día/s</p>
+                                <p><strong>Fecha de
+                                        inicio:</strong> @tarea.FechaInicioMasTemprana.ToString("dd/MM/yyyy")</p>
+                                <p><strong>Fecha de fin:</strong> @tarea.FechaFinMasTemprana.ToString("dd/MM/yyyy")</p>
+                                <p><strong>Holgura:</strong> @tarea.Holgura día/s</p>
+
+                                @if (tarea.UsuariosAsignados.Count > 0)
+                                {
+                                    <p>
+                                        <strong>Miembros:</strong> @string.Join(", ", tarea.UsuariosAsignados.Select(u => $"{u.Nombre} {u.Apellido} ({u.Email})"))
+                                    </p>
+                                }
+                                else
+                                {
+                                    <p><strong>Aún no hay miembros asignados</strong></p>
+                                }
+                            </div>
+                            @if ((ControladorProyectos.EsAdministradorDeProyecto(Sesion.UsuarioLogueado, proyecto.Id) || ControladorProyectos.EsLiderDeProyecto(Sesion.UsuarioLogueado, proyecto.Id)) && tarea.Estado != EstadoTareaDTO.Completada)
+                            {
+                                <div class="d-flex justify-content-center mb-3 gap-2 flex-wrap">
+                                    <button class="btn btn-primary btn-sm d-flex align-items-center gap-1"
+                                            @onclick="() => MostrarVentanaEdicion(tarea.Id)">
+                                        <i class="bi bi-pencil-square"></i> Editar
+                                    </button>
+
+                                    @if (proyecto.Tareas.Count > 1)
+                                    {
+                                        <button class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
+                                                @onclick="() => MostrarVentanaDependencias(tarea.Id)">
+                                            <i class="bi bi-diagram-3"></i> Dependencias
+                                        </button>
+                                    }
+
+                                    <button class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
+                                            @onclick="() => MostrarVentanaRecursos(tarea.Id)">
+                                        <i class="bi bi-box-seam"></i> Recursos
+                                    </button>
+
+                                    <button class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
+                                            @onclick="() => MostrarVentanaMiembros(tarea.Id)">
+                                        <i class="bi bi-people"></i> Miembros
+                                    </button>
+                                </div>
+                            }
+                            @if (proyectoComenzado && ControladorTareas.EsMiembroDeTarea(Sesion.UsuarioLogueado, tarea.Id, proyecto.Id) && !ControladorProyectos.EsAdministradorDeProyecto(Sesion.UsuarioLogueado, proyecto.Id) && tarea.Estado != EstadoTareaDTO.Completada && tarea.Estado != EstadoTareaDTO.Bloqueada)
+                            {
+                                <div class="d-flex justify-content-center mb-3 gap-2 flex-wrap">
+                                    <button class="btn btn-primary btn-sm d-flex align-items-center gap-1"
+                                            @onclick="() => MostrarVentanaEdicionReducida(tarea.Id)">
+                                        <i class="bi bi-pencil-square"></i> Editar
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        }
+    }
+}
+
+<div class="modal fade @(mostrarVentanaCreacion ? "show d-block" : "")" tabindex="-1"
+     style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-3 shadow-lg">
+            <div class="modal-header">
+                <h5 class="modal-title">Crear Tarea</h5>
+                <button type="button" class="btn-close" @onclick="CerrarVentanaCreacion" aria-label="Close"></button>
+            </div>
+            <EditForm Model="tareaDTO" OnValidSubmit="CrearTarea" OnInvalidSubmit="MostrarErroresValidacion">
+                <DataAnnotationsValidator/>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(mensaje))
+                    {
+                        <div
+                            class="alert alert-danger d-flex align-items-center gap-2 text-center justify-content-center">
+                            <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
+                            <span class="fw-semibold">@((MarkupString)mensaje)</span>
+                        </div>
+                    }
+                    <div class="mb-3">
+                        <label for="titulo" class="form-label">Título</label>
+                        <InputText id="titulo" class="form-control" @bind-Value="tareaDTO.Titulo" type="text"
+                                   placeholder="Ingrese el título de la tarea"/>
+                    </div>
+                    <div class="mb-3">
+                        <label for="descripcion" class="form-label">Descripción</label>
+                        <InputTextArea id="descripcion" class="form-control" @bind-Value="tareaDTO.Descripcion"
+                                       placeholder="Ingrese una descripción de la tarea"/>
+                    </div>
+                    <div class="mb-3">
+                        <label for="duracion" class="form-label">Duración en días</label>
+                        <InputNumber id="duracion" class="form-control" @bind-Value="tareaDTO.DuracionEnDias"
+                                     placeholder="Ingrese la duración en días"/>
+                    </div>
+                    <div class="mb-3">
+                        <label for="fechaInicio" class="form-label">Fecha de inicio</label>
+                        <InputDate id="fechaInicio" class="form-control" @bind-Value="tareaDTO.FechaInicioMasTemprana"/>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-plus-circle"></i> Crear
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(mensaje) && mensaje.StartsWith("Tarea creada con éxito"))
+{
+    <div class="alert alert-success d-flex align-items-center gap-2 mt-3 fixed-top"
+         style="z-index: 1050; top: 10px; left: 50%; transform: translateX(-30%);">
+        <i class="bi bi-check-circle"></i> @((MarkupString)mensaje)
+        <button type="button" class="btn-close ms-auto" aria-label="Close" @onclick="CerrarAlerta"></button>
+    </div>
+}
+
+@if (proyectoComenzado)
+{
+    <div class="modal fade @(mostrarVentanaEdicionReducida ? "show d-block" : "")" tabindex="-1"
+         style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content rounded-3 shadow-lg">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Tarea</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarVentanaEdicionReducida"></button>
+                </div>
+                <EditForm Model="tareaEdicionEstado" OnValidSubmit="EditarEstadoTarea"
+                          OnInvalidSubmit="MostrarErroresValidacion">
+                    <DataAnnotationsValidator/>
+                    <ValidationSummary class="d-none"/>
+                    <div class="modal-body">
+                        @if (!string.IsNullOrEmpty(mensaje))
+                        {
+                            <div
+                                class="alert alert-danger d-flex align-items-center gap-2 text-center justify-content-center">
+                                <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
+                                <span class="fw-semibold">@((MarkupString)mensaje)</span>
+                            </div>
+                        }
+                        <div class="form-check mb-3">
+                            @if (tareaActual.Estado == EstadoTareaDTO.Pendiente)
+                            {
+                                <div class="form-check mb-2">
+                                    <InputCheckbox id="enProceso" class="form-check-input"
+                                                   @bind-Value="tareaEdicionEstado.EditoEnProceso"/>
+                                    <label for="enProceso" class="form-check-label">Marcar como 'En proceso'</label>
+                                </div>
+                            }
+                            @if (tareaActual.Estado == EstadoTareaDTO.EnProceso)
+                            {
+                                <div class="form-check mb-2">
+                                    <InputCheckbox id="completada" class="form-check-input"
+                                                   @bind-Value="tareaEdicionEstado.EditoCompletada"/>
+                                    <label for="completada" class="form-check-label">Marcar como 'Completada'</label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-success">Guardar cambio</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(mensaje) && mensaje.StartsWith("Estado editado con éxito"))
+{
+    <div class="alert alert-success d-flex align-items-center gap-2 mt-3 fixed-top"
+         style="z-index: 1050; top: 10px; left: 50%; transform: translateX(-30%);">
+        <i class="bi bi-check-circle"></i> @((MarkupString)mensaje)
+        <button type="button" class="btn-close ms-auto" aria-label="Close" @onclick="CerrarAlerta"></button>
+    </div>
+}
+
+<div class="modal fade @(mostrarVentanaEdicion ? "show d-block" : "")" tabindex="-1"
+     style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rounded-3 shadow-lg">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Editar Tarea</h5>
+                <button type="button" class="btn-close" @onclick="CerrarVentanaEdicion" aria-label="Cerrar"></button>
+            </div>
+
+            <EditForm Model="tareaEdicion" OnValidSubmit="GuardarCambiosTarea"
+                      OnInvalidSubmit="MostrarErroresValidacion">
+                <DataAnnotationsValidator/>
+
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(mensaje))
+                    {
+                        <div
+                            class="alert alert-danger d-flex align-items-center gap-2 text-center justify-content-center">
+                            <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
+                            <span class="fw-semibold">@((MarkupString)mensaje)</span>
+                        </div>
+                    }
+
+                    @if (tareaEdicion.Estado == EstadoTareaDTO.EnProceso)
+                    {
+                        <fieldset class="border rounded p-3 mb-3">
+                            <legend class="float-none w-auto px-2 fs-6 text-muted">Cambiar estado</legend>
+                            <div class="form-check">
+                                <InputCheckbox id="completada" class="form-check-input"
+                                               @bind-Value="editoCompletada"/>
+                                <label for="completada" class="form-check-label">Completada</label>
+                            </div>
+                        </fieldset>
+                    }
+                    else
+                    {
+                        <div class="mb-3">
+                            <label for="titulo" class="form-label fw-semibold">Título</label>
+                            <InputText id="titulo" class="form-control" @bind-Value="tareaEdicion.Titulo"/>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="descripcion" class="form-label fw-semibold">Descripción</label>
+                            <InputTextArea id="descripcion" class="form-control" @bind-Value="tareaEdicion.Descripcion"/>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="duracion" class="form-label">Duración en días</label>
+                            <InputNumber id="duracion" class="form-control" @bind-Value="tareaEdicion.DuracionEnDias"
+                                         placeholder="Ingrese la duración en días"/>
+                        </div>
+                        <div class="mb-3">
+                            <label for="fechaInicio" class="form-label">Fecha de inicio</label>
+                            <InputDate id="fechaInicio" class="form-control"
+                                       @bind-Value="tareaEdicion.FechaInicioMasTemprana"/>
+                        </div>
+
+                        @if (proyectoComenzado && tareaEdicion.Estado == EstadoTareaDTO.Pendiente)
+                        {
+                            <fieldset class="border rounded p-3 mb-3">
+                                <legend class="float-none w-auto px-2 fs-6 text-muted">Cambiar estado</legend>
+                                <div class="form-check">
+                                    <InputCheckbox id="enProceso" class="form-check-input"
+                                                   @bind-Value="editoEnProceso"/>
+                                    <label for="enProceso" class="form-check-label">En proceso</label></div>
+                            </fieldset>
+                        }
+                    }
+                </div>
+                <div class="modal-footer d-flex justify-content-between align-items-center">
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-save"></i> Guardar cambios
+                    </button>
+                    @if (tareaEdicion.Estado != EstadoTareaDTO.EnProceso)
+                    {
+                        @if (!confirmarEliminacionTarea)
+                        {
+                            <button type="button" class="btn btn-outline-danger"
+                                    @onclick="() => confirmarEliminacionTarea = true">
+                                <i class="bi bi-trash3"></i> Eliminar tarea
+                            </button>
+                        }
+                        else
+                        {
+                            <div class="d-flex flex-column text-center w-100">
+                                <div class="alert alert-warning p-2 mb-2">
+                                    <p class="mb-2">¿Estás seguro de que deseas eliminar esta tarea?</p>
+                                    <div class="d-flex justify-content-center gap-2">
+                                        <button type="button" class="btn btn-danger"
+                                                @onclick="() => EliminarTarea(tareaEdicion.Id)">
+                                            Sí, eliminar
+                                        </button>
+                                        <button type="button" class="btn btn-secondary"
+                                                @onclick="() => confirmarEliminacionTarea = false">
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(mensaje) && mensaje.StartsWith("Tarea editada con éxito"))
+{
+    <div class="alert alert-success d-flex align-items-center gap-2 mt-3 fixed-top"
+         style="z-index: 1050; top: 10px; left: 50%; transform: translateX(-30%);">
+        <i class="bi bi-check-circle"></i> @((MarkupString)mensaje)
+        <button type="button" class="btn-close ms-auto" aria-label="Close" @onclick="CerrarAlerta"></button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(mensaje) && mensaje.StartsWith("Tarea eliminada con éxito"))
+{
+    <div class="alert alert-success d-flex align-items-center gap-2 mt-3 fixed-top"
+         style="z-index: 1050; top: 10px; left: 50%; transform: translateX(-30%);">
+        <i class="bi bi-check-circle"></i> @((MarkupString)mensaje)
+        <button type="button" class="btn-close ms-auto" aria-label="Close" @onclick="CerrarAlerta"></button>
+    </div>
+}
+
+<div class="modal fade @(mostrarVentanaDependencias ? "show d-block" : "")" tabindex="-1"
+     style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rounded-3 shadow-lg">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Gestionar Dependencias</h5>
+                <button type="button" class="btn-close" @onclick="CerrarVentanaDependencias"
+                        aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Mensaje -->
+                @if (!string.IsNullOrEmpty(mensaje))
+                {
+                    <div class="alert alert-info d-flex align-items-center gap-2 text-center justify-content-center">
+                        <i class="bi bi-info-circle-fill fs-5"></i>
+                        <span class="fw-semibold">@((MarkupString)mensaje)</span>
+                    </div>
+                }
+
+                <!-- Agregar dependencia -->
+                @if (tareaActual.Estado != EstadoTareaDTO.EnProceso)
+                {
+                    <EditForm Model="dependenciaDTO" OnValidSubmit="AgregarDependencia"
+                          OnInvalidSubmit="MostrarErroresValidacion">
+                    <DataAnnotationsValidator/>
+                    <ValidationSummary class="d-none"/>
+
+                    <fieldset class="border rounded-3 p-3 mb-4">
+                        <legend class="float-none w-auto px-2 fs-6 text-muted mb-0">Agregar dependencia</legend>
+
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Tarea previa</label>
+                                <select class="form-select" @bind="dependenciaDTO.TareaPreviaId">
+                                    <option disabled selected value="0">Seleccione una tarea</option>
+                                    @foreach (var t in tareasDelProyecto)
+                                    {
+                                        <option value="@t.Id">@t.Titulo</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Tipo de dependencia</label>
+                                <select class="form-select" @bind="dependenciaDTO.Tipo">
+                                    <option disabled selected value="">Seleccione un tipo</option>
+                                    <option value="FS">Fin a Inicio (FS)</option>
+                                    <option value="SS">Inicio a Inicio (SS)</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-2 text-end">
+                                <button class="btn btn-success w-100" type="submit">
+                                    <i class="bi bi-plus-circle me-1"></i> Agregar
+                                </button>
+                            </div>
+                        </div>
+                    </fieldset>
+                </EditForm>
+                }
+
+                <!-- Lista de dependencias actuales -->
+                <h6 class="fw-semibold mb-2">Dependencias actuales</h6>
+                @if (tareaActual is not null && tareaActual.Dependencias.Any())
+                {
+                    <ul class="list-group shadow-sm">
+                        @foreach (var dep in tareaActual.Dependencias)
+                        {
+                            <li class="list-group-item d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>
+                                        <strong>@dep.TareaPrevia.Titulo</strong> — @dep.Tipo
+                                    </span>
+                                    @if (tareaActual.Estado != EstadoTareaDTO.EnProceso)
+                                    {
+                                        <button class="btn btn-outline-danger btn-sm"
+                                                @onclick="() => PedirConfirmacion(dep)">
+                                            <i class="bi bi-trash3"></i> Quitar
+                                        </button>
+                                    }
+                                    
+                                </div>
+
+                                @if (dependenciaAConfirmar == $"{dep.TareaPreviaId} {dep.Tipo}")
+                                {
+                                    <div
+                                        class="alert alert-warning mt-2 mb-0 p-2 d-flex justify-content-between align-items-center">
+                                        <span>¿Estás seguro de que querés eliminar esta dependencia?</span>
+                                        <div>
+                                            <button class="btn btn-sm btn-danger me-2" @onclick="ConfirmarEliminacion">
+                                                Sí
+                                            </button>
+                                            <button class="btn btn-sm btn-secondary" @onclick="CancelarEliminacion">No
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="text-muted fst-italic">No hay dependencias agregadas.</p>
+                }
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CerrarVentanaDependencias">
+                    <i class="bi bi-x-lg"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade @(mostrarVentanaRecursos ? "show d-block" : "")" tabindex="-1"
+     style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rounded-3 shadow-lg">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Gestionar Recursos</h5>
+                <button type="button" class="btn-close" @onclick="CerrarVentanaRecursos" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Mensaje -->
+                @if (!string.IsNullOrEmpty(mensaje))
+                {
+                    <div class="alert alert-info d-flex align-items-center gap-2 text-center justify-content-center">
+                        <i class="bi bi-info-circle-fill fs-5"></i>
+                        <span class="fw-semibold">@((MarkupString)mensaje)</span>
+                    </div>
+                }
+                @if (mostrarBotonesCapacidadSuperada)
+                {
+                    <div class="d-flex flex-wrap gap-2 justify-content-center mt-3">
+                        <button class="btn btn-outline-warning" @onclick="ReprogramarTarea">
+                            <i class="bi bi-calendar-check"></i> Reprogramar tarea
+                        </button>
+                        <button class="btn btn-outline-danger" @onclick="ForzarAsignacion">
+                            <i class="bi bi-exclamation-triangle"></i> Forzar asignación
+                        </button>
+                        <button class="btn btn-outline-primary" @onclick="BuscarRecursosAlternativos">
+                            <i class="bi bi-lightbulb"></i> Ver alternativos
+                        </button>
+                    </div>
+                }
+
+                <!-- Agregar recurso -->
+                @if (Sesion.UsuarioLogueado != null && proyecto != null && ControladorProyectos.EsAdministradorDeProyecto(Sesion.UsuarioLogueado, proyecto.Id) && tareaActual.Estado != EstadoTareaDTO.EnProceso)
+                {
+                    <EditForm Model="recursoAsignacionDto" OnValidSubmit="AgregarRecurso"
+                              OnInvalidSubmit="MostrarErroresValidacion">
+                        <DataAnnotationsValidator/>
+                        <ValidationSummary class="d-none"/>
+
+                        <fieldset class="border rounded-3 p-3 mb-4">
+                            <legend class="float-none w-auto px-2 fs-6 text-muted mb-0">Agregar recurso</legend>
+
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-9">
+                                    <label class="form-label fw-semibold">Recurso necesario</label>
+                                    <select class="form-select" @bind="recursoAsignacionDto.Id">
+                                        <option disabled selected value="0">Seleccione un recurso</option>
+                                        @foreach (var r in recursosProyecto)
+                                        {
+                                            <option value="@r.Id">Nombre: '@r.Nombre', tipo: '@r.Tipo', descripción:
+                                                '@r.Descripcion', capacidad: '@r.Capacidad'
+                                            </option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-semibold">Cantidad</label>
+                                    <InputNumber @bind-Value="recursoAsignacionDto.Cantidad" class="form-control" min="1"/>
+                                </div>
+                                <div class="col-md-3">
+                                    <button class="btn btn-success w-100" type="submit">
+                                        <i class="bi bi-plus-circle me-1"></i> Agregar
+                                    </button>
+                                </div>
+                            </div>
+                        </fieldset>
+                    </EditForm>
+                }
+
+                <!-- Lista de recursos asignados -->
+                <h6 class="fw-semibold mb-2">Recursos asignados</h6>
+                @if (tareaActual is not null && tareaActual.RecursosNecesarios.Any())
+                {
+                    <ul class="list-group shadow-sm">
+                        @foreach (var recurso in tareaActual.RecursosNecesarios)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i
+                                          class="bi bi-box-seam me-1 text-primary"></i>Nombre: '@recurso.Recurso.Nombre', tipo: '@recurso.Recurso.Tipo', descripción: '@recurso.Recurso.Descripcion' </span>
+                                @if (ControladorProyectos.EsAdministradorDeProyecto(Sesion.UsuarioLogueado, proyecto.Id) && tareaActual.Estado != EstadoTareaDTO.EnProceso)
+                                {
+                                    <button class="btn btn-outline-danger btn-sm"
+                                            @onclick="() => EliminarRecursoDeTarea(recurso.Id)">
+                                        <i class="bi bi-trash3"></i> Quitar
+                                    </button>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="text-muted fst-italic">No hay recursos asignados a esta tarea.</p>
+                }
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CerrarVentanaRecursos">
+                    <i class="bi bi-x-lg"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade @(mostrarVentanaMiembros ? "show d-block" : "")" tabindex="-1"
+     style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content rounded-3 shadow-lg">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Gestionar Miembros</h5>
+                <button type="button" class="btn-close" @onclick="CerrarVentanaMiembros" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Mensaje -->
+                @if (!string.IsNullOrEmpty(mensaje))
+                {
+                    <div class="alert alert-info d-flex align-items-center gap-2 text-center justify-content-center">
+                        <i class="bi bi-info-circle-fill fs-5"></i>
+                        <span class="fw-semibold">@((MarkupString)mensaje)</span>
+                    </div>
+                }
+
+                <!-- Agregar miembro -->
+                @if (tareaActual.Estado != EstadoTareaDTO.EnProceso)
+                {
+                    <EditForm Model="usuarioAsignacionDto" OnValidSubmit="AgregarMiembro"
+                              OnInvalidSubmit="MostrarErroresValidacion">
+                        <DataAnnotationsValidator/>
+                        <ValidationSummary class="d-none"/>
+
+                        <fieldset class="border rounded-3 p-3 mb-4">
+                            <legend class="float-none w-auto px-2 fs-6 text-muted mb-0">Agregar miembro</legend>
+
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-9">
+                                    <label class="form-label fw-semibold">Nuevo miembro</label>
+                                    <select class="form-select" @bind="usuarioAsignacionDto.Id">
+                                        <option disabled selected value="0">Seleccione un usuario</option>
+                                        @foreach (var u in usuariosDeProyecto)
+                                        {
+                                            <option value="@u.Id">@u.Nombre @u.Apellido (@u.Email)</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <button class="btn btn-success w-100" type="submit">
+                                        <i class="bi bi-plus-circle me-1"></i> Agregar
+                                    </button>
+                                </div>
+                            </div>
+                        </fieldset>
+                    </EditForm>  
+                }
+
+                <!-- Lista de miembros -->
+                <h6 class="fw-semibold mb-2">Miembros de la tarea</h6>
+                @if (tareaActual is not null && tareaActual.UsuariosAsignados.Any())
+                {
+                    <ul class="list-group shadow-sm">
+                        @foreach (var miembro in tareaActual.UsuariosAsignados)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i
+                                          class="bi bi-person-circle me-1 text-primary"></i> @miembro.Nombre @miembro.Apellido (@miembro.Email)</span>
+                                @if (tareaActual.Estado != EstadoTareaDTO.EnProceso)
+                                {
+                                    <button class="btn btn-outline-danger btn-sm"
+                                            @onclick="() => EliminarMiembroDeTarea(miembro.Id)">
+                                        <i class="bi bi-trash3"></i> Quitar
+                                    </button>   
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="text-muted fst-italic">Aún no hay miembros asignados a esta tarea.</p>
+                }
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CerrarVentanaMiembros">
+                    <i class="bi bi-x-lg"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+@code {
+    [Parameter] public int id { get; set; }
+    private ProyectoDTO proyecto;
+    private bool proyectoComenzado => proyecto != null && proyecto.FechaInicio <= DateTime.Today;
+    private bool sesionCargada = false;
+    private bool mostrarVentanaCreacion = false;
+    private bool mostrarVentanaEdicion = false;
+    private bool mostrarVentanaEdicionReducida = false;
+    private bool mostrarVentanaDependencias = false;
+    private bool mostrarVentanaRecursos = false;
+    private bool mostrarVentanaMiembros = false;
+    private bool mostrarBotonesCapacidadSuperada = false;
+    private string mensaje = String.Empty;
+    private string errorDuracion = null;
+    private string errorFechaInicio = null;
+
+    private TareaDTO tareaDTO = new TareaDTO();
+    private TareaDTO tareaEdicion = new TareaDTO();
+    private bool editoCompletada = false;
+    private bool editoEnProceso = false;
+
+    private TareaCambioEstadoDto tareaEdicionEstado = new TareaCambioEstadoDto();
+    bool confirmarEliminacionTarea = false;
+
+    private TareaDTO tareaActual = new TareaDTO();
+    private DependenciaDTO dependenciaDTO = new DependenciaDTO();
+    private List<TareaDTO> tareasDelProyecto = new List<TareaDTO>();
+    private string? dependenciaAConfirmar = null;
+
+    private RecursoAsignacionDTO recursoAsignacionDto = new RecursoAsignacionDTO();
+    private List<RecursoDTO> recursosProyecto = new List<RecursoDTO>();
+
+    private UsuarioAsignacionDTO usuarioAsignacionDto = new UsuarioAsignacionDTO();
+    private List<UsuarioListarDTO> usuariosDeProyecto = new List<UsuarioListarDTO>();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sesionCargada)
+        {
+            bool haySesionActiva = await Sesion.HaySesionActiva();
+
+            if (!haySesionActiva)
+            {
+                Navigator.NavigateTo("/");
+            }
+            else
+            {
+                await Sesion.ActualizarSesion();
+                proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+                sesionCargada = true;
+                StateHasChanged(); // Vuelve a renderizar para mostrar la sesión activa
+            }
+        }
+    }
+
+    private void MostrarVentanaCreacion()
+    {
+        mostrarVentanaCreacion = true;
+        mensaje = String.Empty;
+    }
+
+    private void MostrarVentanaEdicion(int tareaId)
+    {
+        mostrarVentanaEdicion = true;
+        mensaje = String.Empty;
+        TareaDTO tareaAEditar = ControladorTareas.ObtenerTareaPorId(id, tareaId);
+        if (tareaAEditar != null)
+        {
+            tareaEdicion = new TareaDTO
+            {
+                Id = tareaAEditar.Id,
+                Titulo = tareaAEditar.Titulo,
+                Descripcion = tareaAEditar.Descripcion,
+                DuracionEnDias = tareaAEditar.DuracionEnDias,
+                FechaInicioMasTemprana = tareaAEditar.FechaInicioMasTemprana,
+                Estado = tareaAEditar.Estado
+            };
+        }
+        else
+        {
+            mensaje = "Error al cargar la tarea.";
+        }
+    }
+
+    private void MostrarVentanaEdicionReducida(int tareaId)
+    {
+        mostrarVentanaEdicionReducida = true;
+        mensaje = String.Empty;
+        tareaActual = ControladorTareas.ObtenerTareaPorId(proyecto.Id, tareaId);
+        if (tareaActual is null)
+        {
+            mensaje = "Error al cargar la tarea.";
+        }
+    }
+
+    private void MostrarVentanaDependencias(int tareaId)
+    {
+        mostrarVentanaDependencias = true;
+        mensaje = String.Empty;
+        tareaActual = ControladorTareas.ObtenerTareaPorId(proyecto.Id, tareaId);
+        tareasDelProyecto = proyecto.Tareas.Where(t => t.Id != tareaId).ToList();
+    }
+
+    private void MostrarVentanaRecursos(int tareaId)
+    {
+        mostrarVentanaRecursos = true;
+        mensaje = String.Empty;
+        tareaActual = ControladorTareas.ObtenerTareaPorId(proyecto.Id, tareaId);
+        ActualizarRecursosDisponibles();
+    }
+
+    private void MostrarVentanaMiembros(int tareaId)
+    {
+        mostrarVentanaMiembros = true;
+        mensaje = String.Empty;
+        tareaActual = ControladorTareas.ObtenerTareaPorId(proyecto.Id, tareaId);
+        ActualizarUsuariosProyecto();
+    }
+
+    private void CerrarVentanaCreacion()
+    {
+        mostrarVentanaCreacion = false;
+    }
+
+    private void CerrarVentanaEdicion()
+    {
+        mostrarVentanaEdicion = false;
+        confirmarEliminacionTarea = false;
+    }
+
+    private void CerrarVentanaEdicionReducida()
+    {
+        mostrarVentanaEdicionReducida = false;
+    }
+
+    private void CerrarVentanaDependencias()
+    {
+        mostrarVentanaDependencias = false;
+    }
+
+    private void CerrarVentanaRecursos()
+    {
+        mostrarVentanaRecursos = false;
+        mostrarBotonesCapacidadSuperada = false;
+    }
+
+    private void CerrarVentanaMiembros()
+    {
+        mostrarVentanaMiembros = false;
+    }
+
+    private void MostrarErroresValidacion(EditContext editContext)
+    {
+        var errores = new List<string>();
+
+        foreach (var error in editContext.GetValidationMessages())
+        {
+            if (error.Contains("must be a number"))
+            {
+                errores.Add("La duración debe ser un número válido.");
+            }
+            else if (error.Contains("must be a date"))
+            {
+                errores.Add("La fecha de inicio debe ser una fecha válida.");
+            }
+            else
+            {
+                errores.Add(error);
+            }
+        }
+
+        var erroresFormateados = errores.Select(e => $"<li>{e}</li>");
+        mensaje = $"<ul class='list-unstyled mb-0'>{string.Join("", erroresFormateados)}</ul>";
+    }
+
+    private void CrearTarea()
+    {
+        try
+        {
+            ControladorTareas.AgregarTareaAlProyecto(id, Sesion.UsuarioLogueado, tareaDTO);
+            mensaje = "Tarea creada con éxito.";
+            mostrarVentanaCreacion = false;
+            // actualizaciones
+            tareaDTO = new TareaDTO();
+            proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+            StateHasChanged();
+        }
+        catch (Exception e)
+        {
+            mensaje = e.Message;
+        }
+    }
+
+    private void EditarEstadoTarea()
+    {
+        EstadoTareaDTO nuevoEstado = tareaEdicionEstado.EditoCompletada
+            ? EstadoTareaDTO.Completada
+            : (tareaEdicionEstado.EditoEnProceso ? EstadoTareaDTO.EnProceso : tareaActual.Estado);
+        try
+        {
+            ControladorTareas.CambiarEstadoTarea(Sesion.UsuarioLogueado, tareaActual.Id, id, nuevoEstado);
+            mensaje = "Estado editado con éxito.";
+            mostrarVentanaEdicionReducida = false;
+            // actualizaciones
+            tareaEdicionEstado = new TareaCambioEstadoDto();
+            proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+            StateHasChanged();
+        }
+        catch (Exception e)
+        {
+            mensaje = e.Message;
+        }
+    }
+
+    private void GuardarCambiosTarea()
+    {
+        TareaDTO tareaAEditar = ControladorTareas.ObtenerTareaPorId(id, tareaEdicion.Id);
+        UsuarioDTO solicitante = Sesion.UsuarioLogueado;
+        try
+        {
+            if (!tareaAEditar.Titulo.Equals(tareaEdicion.Titulo))
+            {
+                ControladorTareas.ModificarTituloTarea(solicitante, tareaAEditar.Id, id, tareaEdicion.Titulo);
+            }
+
+            if (!tareaAEditar.Descripcion.Equals(tareaEdicion.Descripcion))
+            {
+                ControladorTareas.ModificarDescripcionTarea(solicitante, tareaAEditar.Id, id, tareaEdicion.Descripcion);
+            }
+
+            if (tareaAEditar.DuracionEnDias != tareaEdicion.DuracionEnDias)
+            {
+                ControladorTareas.ModificarDuracionTarea(solicitante, tareaAEditar.Id, id, tareaEdicion.DuracionEnDias);
+            }
+
+            if (!tareaAEditar.FechaInicioMasTemprana.Equals(tareaEdicion.FechaInicioMasTemprana))
+            {
+                ControladorTareas.ModificarFechaInicioTarea(solicitante, tareaAEditar.Id, id, tareaEdicion.FechaInicioMasTemprana);
+            }
+
+            if (editoCompletada)
+            {
+                ControladorTareas.CambiarEstadoTarea(solicitante, tareaAEditar.Id, id, EstadoTareaDTO.Completada);
+            }
+            else if (editoEnProceso)
+            {
+                ControladorTareas.CambiarEstadoTarea(solicitante, tareaAEditar.Id, id, EstadoTareaDTO.EnProceso);
+            }
+
+            mensaje = "Tarea editada con éxito.";
+            mostrarVentanaEdicion = false;
+            // actualizaciones
+            tareaEdicion = new TareaDTO();
+            editoCompletada = false;
+            editoEnProceso = false;
+            proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+            tareaActual = ControladorTareas.ObtenerTareaPorId(proyecto.Id, tareaActual.Id);
+            StateHasChanged();
+        }
+        catch (Exception e)
+        {
+            mensaje = e.Message;
+        }
+    }
+
+    private void EliminarTarea(int tareaEdicionId)
+    {
+        try
+        {
+            ControladorTareas.EliminarTareaDelProyecto(id, Sesion.UsuarioLogueado, tareaEdicionId);
+            mensaje = "Tarea eliminada con éxito";
+            mostrarVentanaEdicion = false;
+            confirmarEliminacionTarea = false;
+            // actualizaciones
+            tareaEdicion = new TareaDTO();
+            editoCompletada = false;
+            editoEnProceso = false;
+            proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+            StateHasChanged();
+        }
+        catch (Exception e)
+        {
+            mensaje = e.Message;
+        }
+    }
+
+    private void AgregarDependencia()
+    {
+        try
+        {
+            ControladorTareas.AgregarDependenciaATarea(Sesion.UsuarioLogueado, tareaActual.Id, dependenciaDTO.TareaPreviaId, id, dependenciaDTO.Tipo);
+            mensaje = "Dependencia agregada con éxito.";
+            // actualizaciones
+            dependenciaDTO = new DependenciaDTO();
+            proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+            tareaActual = ControladorTareas.ObtenerTareaPorId(proyecto.Id, tareaActual.Id);
+            StateHasChanged();
+        }
+        catch (Exception e)
+        {
+            mensaje = e.Message;
+        }
+    }
+
+    private void EliminarDependencia(int tareaDependienteId)
+    {
+        try
+        {
+            ControladorTareas.EliminarDependenciaDeTarea(Sesion.UsuarioLogueado, tareaActual.Id, tareaDependienteId, id);
+            mensaje = "Dependencia eliminada con éxito.";
+            // actualizaciones
+            proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+            tareaActual = ControladorTareas.ObtenerTareaPorId(proyecto.Id, tareaActual.Id);
+            StateHasChanged();
+        }
+        catch (Exception e)
+        {
+            mensaje = e.Message;
+        }
+    }
+
+    private void AgregarRecurso()
+    {
+        try
+        {
+            RecursoDTO nuevoRecurso = ControladorRecursos.ObtenerRecursoPorId(recursoAsignacionDto.Id);
+            try
+            {
+                ControladorTareas.ValidarYAsignarRecurso(Sesion.UsuarioLogueado, tareaActual.Id, proyecto.Id, nuevoRecurso, recursoAsignacionDto.Cantidad);
+                mensaje = "Recurso agregado con éxito.";
+            }
+            catch (ExcepcionConflicto e) 
+            {
+                mensaje = e.Message;
+                mostrarBotonesCapacidadSuperada = true;
+                return;
+            }
+            catch (ExcepcionRecurso e)
+            {
+                mensaje = e.Message; 
+            }
+            catch (ExcepcionTarea e)
+            {
+                mensaje = e.Message; 
+            }
+            catch (ExcepcionDominio e)
+            {
+            mensaje = e.Message;
+            }
+            catch (Exception e)
+            {
+                mensaje = "Error inesperado al agregar recurso.";
+            }
+
+            // actualizaciones
+            recursoAsignacionDto = new RecursoAsignacionDTO();
+            proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+            tareaActual = ControladorTareas.ObtenerTareaPorId(proyecto.Id, tareaActual.Id);
+            ActualizarRecursosDisponibles();
+            StateHasChanged();
+        }
+        catch (ExcepcionRecurso)
+        {
+            mensaje = "Seleccione un recurso";
+        }
+        catch (Exception e)
+        {
+            mensaje = e.Message;
+        }
+    }
+
+    private void EliminarRecursoDeTarea(int idRecurso)
+    {
+        try
+        {
+            RecursoDTO recurso = tareaActual.RecursosNecesarios.FirstOrDefault(rn => rn.Id == idRecurso)?.Recurso;
+            //RecursoDTO recurso = ControladorRecursos.ObtenerRecursoPorId(idRecurso);
+            ControladorTareas.EliminarRecursoDeTarea(Sesion.UsuarioLogueado, tareaActual.Id, proyecto.Id, recurso);
+            mensaje = "Recurso eliminado con éxito.";
+            // actualizaciones
+            proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+            tareaActual = ControladorTareas.ObtenerTareaPorId(proyecto.Id, tareaActual.Id);
+            ActualizarRecursosDisponibles();
+            StateHasChanged();
+        }
+        catch (Exception e)
+        {
+            mensaje = e.Message;
+        }
+    }
+
+    private void AgregarMiembro()
+    {
+        try
+        {
+            UsuarioDTO nuevoMiembro = ControladorUsuarios.ObtenerUsuarioPorId(usuarioAsignacionDto.Id);
+            ControladorTareas.AgregarMiembroATarea(Sesion.UsuarioLogueado, tareaActual.Id, proyecto.Id, nuevoMiembro);
+            mensaje = "Miembro agregado con éxito.";
+            // actualizaciones
+            usuarioAsignacionDto = new UsuarioAsignacionDTO();
+            proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+            tareaActual = ControladorTareas.ObtenerTareaPorId(proyecto.Id, tareaActual.Id);
+            ActualizarUsuariosProyecto();
+            StateHasChanged();
+        }
+        catch (ExcepcionUsuario)
+        {
+            mensaje = "Seleccione un usuario";
+        }
+        catch (Exception e)
+        {
+            mensaje = e.Message;
+        }
+    }
+
+    private void EliminarMiembroDeTarea(int idUsuario)
+    {
+        try
+        {
+            UsuarioDTO miembro = ControladorUsuarios.ObtenerUsuarioPorId(idUsuario);
+            ControladorTareas.EliminarMiembroDeTarea(Sesion.UsuarioLogueado, tareaActual.Id, proyecto.Id, miembro);
+            mensaje = "Usuario eliminado de la tarea con éxito.";
+            // actualizaciones
+            proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+            tareaActual = ControladorTareas.ObtenerTareaPorId(proyecto.Id, tareaActual.Id);
+            ActualizarUsuariosProyecto();
+            StateHasChanged();
+        }
+        catch (ExcepcionUsuario)
+        {
+            mensaje = "Seleccione un usuario";
+        }
+        catch (Exception e)
+        {
+            mensaje = e.Message;
+        }
+    }
+
+    private void ActualizarRecursosDisponibles()
+    {
+        List<RecursoDTO> recursosGenerales = ControladorRecursos.ObtenerRecursosGenerales();
+        List<RecursoDTO> recursosExclusivos = ControladorRecursos.ObtenerRecursosExclusivos(proyecto.Id);
+        List<RecursoNecesarioDTO> recursosYaAsignados = tareaActual.RecursosNecesarios;
+        List<RecursoDTO> todosLosRecursos = recursosGenerales.Concat(recursosExclusivos).ToList();
+        recursosProyecto = todosLosRecursos.Where(r => !recursosYaAsignados.Any(asignado => asignado.Recurso.Id == r.Id)).ToList();
+    }
+
+    private void ActualizarUsuariosProyecto()
+    {
+        List<UsuarioListarDTO> usuarios = proyecto.Miembros;
+        List<UsuarioListarDTO> miembrosDeLaTarea = tareaActual.UsuariosAsignados;
+        usuariosDeProyecto = usuarios.Where(u => !miembrosDeLaTarea.Any(asignado => asignado.Id == u.Id)).ToList();
+    }
+
+    private void CerrarAlerta()
+    {
+        mensaje = string.Empty;
+    }
+
+    private string FormatearEstado(EstadoTareaDTO estado)
+    {
+        // Inserta espacios antes de mayúsculas internas
+        return System.Text.RegularExpressions.Regex.Replace(estado.ToString(), "(\\B[A-Z])", " $1");
+    }
+
+    private void PedirConfirmacion(DependenciaDTO dependencia)
+    {
+        dependenciaAConfirmar = $"{dependencia.TareaPreviaId} {dependencia.Tipo}";
+    }
+
+    private void CancelarEliminacion()
+    {
+        dependenciaAConfirmar = null;
+    }
+
+    private void ConfirmarEliminacion()
+    {
+        if (!string.IsNullOrWhiteSpace(dependenciaAConfirmar))
+        {
+            string[] partes = dependenciaAConfirmar.Split(' ');
+            int id = int.Parse(partes[0]);
+            EliminarDependencia(id);
+            dependenciaAConfirmar = null;
+        }
+    }
+
+    private void ReprogramarTarea()
+    {
+        mostrarBotonesCapacidadSuperada = false;
+        RecursoDTO recursoDTO = new RecursoDTO { Id = recursoAsignacionDto.Id };
+        ControladorTareas.ReprogramarTarea(Sesion.UsuarioLogueado, proyecto.Id, tareaActual.Id, recursoDTO, recursoAsignacionDto.Cantidad);
+        mensaje = "Se envió una notificación con una nueva fecha de inicio para la tarea.";
+        StateHasChanged();
+    }
+
+    
+    private void ForzarAsignacion()
+    {
+        mostrarBotonesCapacidadSuperada = false;
+        RecursoDTO recursoDTO = new RecursoDTO { Id = recursoAsignacionDto.Id };
+        ControladorTareas.ForzarAsignacion(Sesion.UsuarioLogueado, tareaActual.Id, proyecto.Id, recursoDTO, recursoAsignacionDto.Cantidad);
+        mensaje = "Recurso asignado forzadamente.";
+        proyecto = ControladorProyectos.ObtenerProyectoPorId(proyecto.Id);
+        tareaActual = ControladorTareas.ObtenerTareaPorId(proyecto.Id, tareaActual.Id);
+        ActualizarRecursosDisponibles();
+        StateHasChanged();
+    }
+
+    private void BuscarRecursosAlternativos()
+    {
+        mostrarBotonesCapacidadSuperada = false;
+        var recursoDTO = new RecursoDTO { Id = recursoAsignacionDto.Id };
+        ControladorTareas.EncontrarRecursosAlternativosMismoTipo(Sesion.UsuarioLogueado, proyecto.Id, recursoDTO, tareaActual.FechaInicioMasTemprana, tareaActual.FechaFinMasTemprana, recursoAsignacionDto.Cantidad);
+        mensaje = "Se envió una notificación con los recursos alternativos.";
+        StateHasChanged();
+    }
+
+}

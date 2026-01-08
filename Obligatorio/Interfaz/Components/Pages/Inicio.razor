@@ -1,0 +1,65 @@
+@page "/inicio"
+@using Interfaz.ServiciosInterfaz
+@rendermode InteractiveServer
+@inject LogicaSesion Sesion
+@inject NavigationManager Navigation
+
+@if (Sesion.UsuarioLogueado == null || !sesionCargada)
+{
+}
+else
+{
+    <div class="container mt-5">
+        <div class="text-center mb-4">
+            <h1 class="display-4 text-dark">
+                Bienvenido, @Sesion.UsuarioLogueado.Nombre @Sesion.UsuarioLogueado.Apellido a <strong class="text-dark">TaskTrackPro</strong>
+            </h1>
+            <h3 class="lead text-muted">Tu solución integral para la gestión de proyectos.</h3>
+        </div>
+
+        <hr class="my-4"/>
+
+        <div class="text-muted">
+            <p class="mb-4">
+                <strong>TaskTrackPro</strong> es una aplicación web diseñada para facilitar la organización, seguimiento
+                y planificación de proyectos en equipo. Permite crear y administrar proyectos, asignar tareas con
+                dependencias, establecer fechas clave y calcular automáticamente el camino crítico para optimizar la
+                duración del proyecto.
+            </p>
+
+            <p class="mb-4">
+                Con un enfoque colaborativo, <strong>TaskTrackPro</strong> ofrece funcionalidades como notificaciones
+                automáticas, control de permisos por roles y visualización clara del progreso del proyecto.
+            </p>
+
+            <p class="mb-4">
+                Ideal para equipos que buscan eficiencia, transparencia y control total en la ejecución de sus
+                proyectos.
+            </p>
+        </div>
+    </div>
+}
+
+@code {
+    private bool sesionCargada = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sesionCargada)
+        {
+            bool haySesionActiva = await Sesion.HaySesionActiva();
+
+            if (!haySesionActiva)
+            {
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                await Sesion.ActualizarSesion();
+                sesionCargada = true;
+                StateHasChanged(); // Vuelve a renderizar para mostrar la sesión activa
+            }
+        }
+    }
+
+}

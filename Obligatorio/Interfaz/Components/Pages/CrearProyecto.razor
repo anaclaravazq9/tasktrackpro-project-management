@@ -1,0 +1,119 @@
+@page "/crear-proyecto"
+@using Interfaz.ServiciosInterfaz
+@using DTOs
+@using Controladores
+@rendermode InteractiveServer
+@inject LogicaSesion Sesion
+@inject NavigationManager Navigation
+@inject ControladorProyectos ControladorProyectos
+
+@if (Sesion.UsuarioLogueado == null || !sesionCargada)
+{
+}
+else if (Sesion.EsAdminProyecto() && !Sesion.UsuarioLogueado.EstaAdministrandoUnProyecto)
+{
+    <h3 class="text-center mt-4">Crear Proyecto</h3>
+
+    <div class="row justify-content-center mt-3">
+        <div class="col-md-6">
+            @if (!string.IsNullOrEmpty(mensaje))
+            {
+                <div class="alert alert-@tipoAlerta d-flex align-items-center gap-2 text-center justify-content-center">
+                    <span class="fw-semibold">@((MarkupString)mensaje)</span>
+                </div>
+            }
+            <EditForm Model="nuevoProyecto" OnValidSubmit="@CrearNuevoProyecto"
+                      OnInvalidSubmit="MostrarErroresValidacion">
+                <DataAnnotationsValidator/>
+                <ValidationSummary class="d-none"/>
+                <div class="form-group mb-3">
+                    <label for="nombre">Nombre</label>
+                    <InputText id="nombre" class="form-control" @bind-Value="nuevoProyecto.Nombre"/>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="descripcion">Descripción</label>
+                    <InputTextArea id="descripcion" class="form-control" @bind-Value="nuevoProyecto.Descripcion"/>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="inicio">Fecha de Inicio</label>
+                    <InputDate id="inicio" class="form-control" @bind-Value="nuevoProyecto.FechaInicio"/>
+                </div>
+                <div class="text-center">
+                    <button type="submit" class="btn btn-success w-50">Crear Proyecto</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private bool sesionCargada = false;
+
+    private ProyectoDTO nuevoProyecto = new ProyectoDTO();
+    private string mensaje;
+    private string tipoAlerta;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sesionCargada)
+        {
+            bool haySesionActiva = await Sesion.HaySesionActiva();
+
+            if (!haySesionActiva)
+            {
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                await Sesion.ActualizarSesion();
+                sesionCargada = true;
+                StateHasChanged(); // Vuelve a renderizar para mostrar la sesión activa
+            }
+        }
+    }
+
+    private async Task CrearNuevoProyecto()
+    {
+        mensaje = String.Empty;
+        try
+        {
+            UsuarioDTO solicitante = Sesion.UsuarioLogueado;
+            ControladorProyectos.CrearProyecto(nuevoProyecto, solicitante);
+            mensaje = "Proyecto creado con éxito.";
+            tipoAlerta = "success";
+            int idProyectoCreado = nuevoProyecto.Id;
+            // actualizaciones
+            nuevoProyecto = new ProyectoDTO();
+            await Sesion.ActualizarSesion();
+            StateHasChanged();
+            Navigation.NavigateTo($"/exito/proyecto/{idProyectoCreado}/creado");
+        }
+        catch (Exception e)
+        {
+            mensaje = e.Message;
+            tipoAlerta = "danger";
+        }
+    }
+
+    private void MostrarErroresValidacion(EditContext editContext)
+    {
+        var errores = new List<string>();
+
+        foreach (var error in editContext.GetValidationMessages())
+        {
+            if (error.Contains("must be a date"))
+            {
+                errores.Add("La fecha de inicio debe ser una fecha válida.");
+            }
+            else
+            {
+                errores.Add(error);
+            }
+        }
+
+        var erroresFormateados = errores.Select(e => $"<li>{e}</li>");
+        mensaje = $"<ul class='list-unstyled mb-0'>{string.Join("", erroresFormateados)}</ul>";
+        tipoAlerta = "danger";
+    }
+
+}

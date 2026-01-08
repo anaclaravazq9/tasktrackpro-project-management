@@ -1,0 +1,16 @@
+﻿@using Interfaz.Components.Pages
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        @if (routeData.PageType != typeof(LogIn))
+        {
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(Components.Layout.EstructuraPrincipal)"/>
+        }
+        else
+        {
+            <RouteView RouteData="@routeData" DefaultLayout="null"/>
+        }
+    </Found>
+    <NotFound>
+        <RedirectLogin/>
+    </NotFound>
+</Router>

@@ -1,0 +1,130 @@
+@page "/informacion/proyecto/{id:int}"
+@using DTOs
+@using Interfaz.ServiciosInterfaz
+@using Controladores
+@rendermode InteractiveServer
+@inject LogicaSesion Sesion
+@inject ControladorProyectos ControladorProyectos
+@inject NavigationManager Navigator
+
+@if (Sesion.UsuarioLogueado == null || !sesionCargada)
+{
+}
+else if (proyecto is null)
+{
+    <p>No se encontró el proyecto</p>
+}
+else if (ControladorProyectos.EsMiembroDeProyecto(Sesion.UsuarioLogueado.Id, proyecto.Id) || Sesion.EsAdminSistema())
+{
+    <div class="container mt-4">
+        <div class="d-flex justify-content-center">
+            <div class="card shadow-sm border-0 w-75">
+                <div class="card-header text-white text-center" style="background-color: #343a40;">
+                    <h3 class="mb-0">Información del Proyecto</h3>
+                </div>
+                <div class="card-body" style="background-color: #f4f4f4; color: #333;">
+                    <div class="row mb-3">
+                        <div class="col-md-4"><strong><i class="bi bi-folder-fill"></i> Nombre:</strong></div>
+                        <div class="col-md-8">@proyecto.Nombre</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4"><strong><i class="bi bi-pencil-square"></i> Descripción:</strong></div>
+                        <div class="col-md-8">@proyecto.Descripcion</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4"><strong><i class="bi bi-person-circle"></i> Administrador:</strong></div>
+                        <div
+                            class="col-md-8">@($"{proyecto.Administrador.Nombre} {proyecto.Administrador.Apellido} ({proyecto.Administrador.Email})")</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4"><strong><i class="bi bi-calendar-event"></i> Fecha de Inicio:</strong>
+                        </div>
+                        <div class="col-md-8">@proyecto.FechaInicio.ToShortDateString()</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4"><strong><i class="bi bi-calendar-check"></i> Fecha de Fin
+                                Estimada:</strong></div>
+                        @if (!proyecto.Tareas.Any())
+                        {
+                            <div class="col-md-8 text-muted">Aún no se puede calcular la fecha de finalización.</div>
+                        }
+                        else
+                        {
+                            <div class="col-md-8">@proyecto.FechaFinMasTemprana.ToShortDateString()</div>
+                        }
+                    </div>
+
+                    <!-- Panel de estado de tareas -->
+                    <hr/>
+                    <h5 class="text-center text-secondary mt-4 mb-3"><i class="bi bi-activity"></i> Estado de Tareas
+                    </h5>
+                    @if (!proyecto.Tareas.Any())
+                    {
+                        <div class="text-center text-muted mb-3">
+                            <i class="bi bi-info-circle me-2"></i> Aún no hay tareas en el proyecto.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="list-group">
+                            @foreach (var tarea in proyecto.Tareas)
+                            {
+                                if (tarea.Holgura == 0)
+                                {
+                                    <div
+                                        class="list-group-item list-group-item-danger d-flex justify-content-between align-items-center">
+                                        <span><i class="bi bi-exclamation-triangle-fill me-2"></i> @tarea.Titulo</span>
+                                        <span class="badge bg-danger">Crítica</span>
+                                    </div>
+                                }
+                                else if (tarea.Estado != EstadoTareaDTO.Completada)
+                                {
+                                    <div
+                                        class="list-group-item list-group-item-primary d-flex justify-content-between align-items-center">
+                                        <span><i class="bi bi-hourglass-split me-2"></i> @tarea.Titulo</span>
+                                        <span class="badge bg-primary">Holgura: @tarea.Holgura día/s</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div
+                                        class="list-group-item list-group-item-success d-flex justify-content-between align-items-center">
+                                        <span><i class="bi bi-check-circle-fill me-2"></i> @tarea.Titulo</span>
+                                        <span class="badge bg-success">Completada</span>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int id { get; set; }
+    private ProyectoDTO proyecto;
+    private bool sesionCargada = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sesionCargada)
+        {
+            bool haySesionActiva = await Sesion.HaySesionActiva();
+
+            if (!haySesionActiva)
+            {
+                Navigator.NavigateTo("/");
+            }
+            else
+            {
+                await Sesion.ActualizarSesion();
+                proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+                sesionCargada = true;
+                StateHasChanged(); // Vuelve a renderizar para mostrar la sesión activa
+            }
+        }
+    }
+
+}

@@ -1,0 +1,351 @@
+@page "/proyecto/{id:int}/recursos_exclusivos"
+@rendermode InteractiveServer
+@using System.ComponentModel.DataAnnotations
+@using DTOs
+@using Interfaz.ServiciosInterfaz
+@using Controladores
+@inject ControladorProyectos ControladorProyectos
+@inject NavigationManager NavigationManager
+@inject LogicaSesion Sesion
+@inject ControladorRecursos ControladorRecursos
+
+
+@if (Sesion.UsuarioLogueado == null || !sesionCargada)
+{
+}
+else if (proyecto == null)
+{
+    <div class="alert alert-danger">No se encontró el proyecto.</div>
+}
+else
+{
+    <h3>Recursos Exclusivos</h3>
+
+    @if (ControladorProyectos.EsAdministradorDeProyecto(Sesion.UsuarioLogueado, proyecto.Id))
+    {
+        <button class="btn btn-primary mb-3" @onclick="MostrarFormularioCrearRecurso">
+            <i class="bi bi-plus-circle"></i> Crear recurso exclusivo
+        </button>
+    }
+
+    @if (mostrarError)
+    {
+        <div class="alert alert-danger" role="alert">
+            @errorMensaje
+        </div>
+    }
+
+    @if (mostrarFormCrearRecurso)
+    {
+        <EditForm Model="nuevoRecurso" OnValidSubmit="CrearRecurso">
+            <DataAnnotationsValidator/>
+            <div class="card mb-4">
+                <div class="card-header">
+                    <strong>Nuevo Recurso</strong>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label>Nombre</label>
+                        <InputText class="form-control" @bind-Value="nuevoRecurso.Nombre" @oninput="OcultarError"/>
+                    </div>
+                    <div class="mb-3">
+                        <label>Tipo</label>
+                        <InputText class="form-control" @bind-Value="nuevoRecurso.Tipo" @oninput="OcultarError"/>
+                    </div>
+                    <div class="mb-3">
+                        <label>Descripción</label>
+                        <InputText class="form-control" @bind-Value="nuevoRecurso.Descripcion"
+                                   @oninput="OcultarError"></InputText>
+                    </div>
+                    <div class="mb-3">
+                        <label>Capacidad</label>
+                        <InputNumber class="form-control" @bind-Value="nuevoRecurso.Capacidad" @oninput="OcultarError"/>
+                    </div>
+                    <button class="btn btn-success" @onclick="CrearRecurso">Guardar</button>
+                    <button class="btn btn-secondary ms-2" @onclick="CancelarCrearRecurso">Cancelar</button>
+                </div>
+            </div>
+        </EditForm>
+    }
+
+    @if (mostrarErrorEditar)
+    {
+        <div class="alert alert-danger" role="alert">
+            @errorMensajeEditar
+        </div>
+    }
+
+    @if (mostrarFormEditarRecurso)
+    {
+        <EditForm Model="recursoAEditar" OnValidSubmit="GuardarCambiosRecurso">
+            <DataAnnotationsValidator/>
+            <div class="card mb-4">
+                <div class="card-header">
+                    <strong>Editar Recurso</strong>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label>Nombre</label>
+                        <InputText class="form-control" @bind-Value="recursoAEditar.Nombre"
+                                   @oninput="OcultarErrorEditar"/>
+                    </div>
+                    <div class="mb-3">
+                        <label>Tipo</label>
+                        <InputText class="form-control" @bind-Value="recursoAEditar.Tipo"
+                                   @oninput="OcultarErrorEditar"/>
+                    </div>
+                    <div class="mb-3">
+                        <label>Descripción</label>
+                        <InputText class="form-control" @bind-Value="recursoAEditar.Descripcion"
+                                   @oninput="OcultarErrorEditar"/>
+                    </div>
+                    <div class="mb-3">
+                        <label>Capacidad</label>
+                        <InputNumber class="form-control" @bind-Value="recursoAEditar.Capacidad" @oninput="OcultarErrorEditar"/>
+                    </div>
+                    <button class="btn btn-success" @onclick="GuardarCambiosRecurso">Guardar Cambios</button>
+                    <button class="btn btn-secondary ms-2" type="button" @onclick="CancelarEdicionRecurso">Cancelar
+                    </button>
+                </div>
+            </div>
+        </EditForm>
+    }
+
+    @if (mostrarErrorEliminar)
+    {
+        <div class="alert alert-danger" role="alert">
+            @errorMensajeEliminar
+        </div>
+    }
+
+    @if (ControladorRecursos.ObtenerRecursosExclusivos(proyecto.Id).Count == 0)
+    {
+        <p>No hay recursos disponibles.</p>
+    }
+    else
+    {
+        <table class="table table-striped">
+            <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Tipo</th>
+                <th>Descripción</th>
+                <th>Capacidad</th>
+                @if (Sesion.UsuarioLogueado.Equals(proyecto.Administrador) || Sesion.EsAdminSistema())
+                {
+                    <th></th>
+                }
+                @if (Sesion.UsuarioLogueado.Equals(proyecto.Administrador))
+                {
+                    <th></th>
+                }
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (RecursoDTO recurso in ControladorRecursos.ObtenerRecursosExclusivos(proyecto.Id))
+            {
+                <tr>
+                    <td>@recurso.Nombre</td>
+                    <td>@recurso.Tipo</td>
+                    <td>@recurso.Descripcion</td>
+                    <td>@recurso.Capacidad</td>
+                    @if (Sesion.EsAdminSistema() || Sesion.UsuarioLogueado.Equals(proyecto.Administrador))
+                    {
+                        <td>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => EditarRecurso(recurso.Id)">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => EliminarRecurso(recurso.Id)">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        </td>
+                    }
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+
+    [Parameter] public int Id { get; set; }
+    private bool sesionCargada = false;
+    private ProyectoDTO proyecto;
+    private bool mostrarFormCrearRecurso = false;
+    private bool mostrarError = false;
+    private string errorMensaje;
+    private RecursoDTO nuevoRecurso = new RecursoDTO();
+    private bool mostrarFormEditarRecurso = false;
+    private RecursoDTO recursoAEditar = new RecursoDTO();
+    private int idRecursoAEditar;
+    private bool mostrarErrorEditar = false;
+    private string errorMensajeEditar;
+    private bool esExclusivo = true;
+    private bool mostrarErrorEliminar = false;
+    private string errorMensajeEliminar;
+
+    private void MostrarFormularioCrearRecurso()
+    {
+        esExclusivo = true;
+        mostrarFormCrearRecurso = true;
+        nuevoRecurso = new RecursoDTO();
+    }
+
+    private void CancelarCrearRecurso()
+    {
+        mostrarFormCrearRecurso = false;
+        mostrarError = false;
+    }
+
+    private void CrearRecurso()
+    {
+        mostrarError = false;
+        errorMensaje = "";
+
+        var errores = ValidarModelo(nuevoRecurso);
+        if (errores.Any())
+        {
+            errorMensaje = string.Join(" ", errores.Select(e => e.ErrorMessage));
+            mostrarError = true;
+            return;
+        }
+
+        try
+        {
+            ControladorRecursos.AgregarRecurso(Sesion.UsuarioLogueado, nuevoRecurso, esExclusivo);
+            mostrarFormCrearRecurso = false;
+            mostrarError = false;
+        }
+        catch (Exception ex)
+        {
+            errorMensaje = $"Error al crear recurso: {ex.Message}";
+            mostrarError = true;
+        }
+    }
+
+    private void OcultarError(ChangeEventArgs e)
+    {
+        mostrarError = false;
+    }
+
+    private List<ValidationResult> ValidarModelo(object modelo)
+    {
+        var resultados = new List<ValidationResult>();
+        var contexto = new ValidationContext(modelo, serviceProvider: null, items: null);
+        Validator.TryValidateObject(modelo, contexto, resultados, validateAllProperties: true);
+        return resultados;
+    }
+
+    private void EditarRecurso(int idRecurso)
+    {
+        recursoAEditar = ControladorRecursos.ObtenerRecursoExclusivoPorId(proyecto.Id, idRecurso);
+        if (recursoAEditar != null)
+        {
+            mostrarFormEditarRecurso = true;
+        }
+    }
+
+    private void GuardarCambiosRecurso()
+    {
+        mostrarErrorEditar = false;
+        errorMensajeEditar = "";
+
+        var errores = ValidarModelo(recursoAEditar);
+        if (errores.Any())
+        {
+            errorMensajeEditar = string.Join(" ", errores.Select(e => e.ErrorMessage));
+            mostrarErrorEditar = true;
+            return;
+        }
+
+        try
+        {
+            ControladorRecursos.ModificarNombreRecurso(Sesion.UsuarioLogueado, recursoAEditar.Id, recursoAEditar.Nombre);
+            ControladorRecursos.ModificarTipoRecurso(Sesion.UsuarioLogueado, recursoAEditar.Id, recursoAEditar.Tipo);
+            ControladorRecursos.ModificarDescripcionRecurso(Sesion.UsuarioLogueado, recursoAEditar.Id, recursoAEditar.Descripcion);
+            ControladorRecursos.ModificarCapacidadRecurso(Sesion.UsuarioLogueado, recursoAEditar.Id, recursoAEditar.Capacidad);
+
+
+            mostrarFormEditarRecurso = false;
+            recursoAEditar = null;
+        }
+        catch (Exception ex)
+        {
+            errorMensajeEditar = $"Error al editar recurso: {ex.Message}";
+            mostrarErrorEditar = true;
+        }
+    }
+
+    private void CancelarEdicionRecurso()
+    {
+        mostrarFormEditarRecurso = false;
+        mostrarErrorEditar = false;
+    }
+
+    private void OcultarErrorEditar(ChangeEventArgs e)
+    {
+        mostrarErrorEditar = false;
+    }
+
+    private async Task EliminarRecurso(int idRecurso)
+    {
+        try
+        {
+            mostrarErrorEliminar = false;
+            ControladorRecursos.EliminarRecurso(Sesion.UsuarioLogueado, idRecurso);
+
+            if (mostrarFormEditarRecurso && recursoAEditar != null && recursoAEditar.Id == idRecurso)
+            {
+                mostrarFormEditarRecurso = false;
+                recursoAEditar = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMensajeEliminar = $"No se puede eliminar el recurso: {ex.Message}";
+            mostrarErrorEliminar = true;
+            StateHasChanged();
+            await OcultarErrorEliminarAutomaticamente();
+        }
+    }
+
+    private async Task OcultarErrorEliminarAutomaticamente()
+    {
+        await Task.Delay(5000);
+        mostrarErrorEliminar = false;
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sesionCargada)
+        {
+            bool haySesionActiva = await Sesion.HaySesionActiva();
+
+            if (!haySesionActiva)
+            {
+                NavigationManager.NavigateTo("/");
+            }
+            else
+            {
+                await Sesion.ActualizarSesion();
+                try
+                {
+                    proyecto = ControladorProyectos.ObtenerProyectoPorId(Id);
+                }
+                catch
+                {
+                    NavigationManager.NavigateTo("/Error");
+                    return;
+                }
+
+                sesionCargada = true;
+                StateHasChanged(); // Vuelve a renderizar para mostrar la sesión activa
+            }
+        }
+    }
+
+}

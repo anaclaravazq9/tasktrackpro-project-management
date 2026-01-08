@@ -1,0 +1,52 @@
+﻿@using Interfaz.ServiciosInterfaz
+@inject LogicaSesion Sesion
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+@implements IDisposable
+
+@if (Sesion.UsuarioLogueado is not null)
+{
+    @if (Sesion.EsLider())
+    {
+        <NavLink href="/ExportarProyectos" class="nav-link text-white">Exportar Proyectos</NavLink>
+    }
+    
+}
+
+@code {
+    private bool sesionCargada = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sesionCargada)
+        {
+            bool haySesionActiva = await Sesion.HaySesionActiva();
+
+            if (!haySesionActiva)
+            {
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                await Sesion.ActualizarSesion();
+                sesionCargada = true;
+                StateHasChanged(); // Vuelve a renderizar para mostrar la sesión activa
+            }
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        Sesion.SesionModificada += RefrescarLayout;
+    }
+
+    private void RefrescarLayout()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Sesion.SesionModificada -= RefrescarLayout;
+    }
+}

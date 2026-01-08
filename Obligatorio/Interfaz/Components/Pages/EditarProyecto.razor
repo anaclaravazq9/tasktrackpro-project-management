@@ -1,0 +1,195 @@
+@page "/proyecto/{id:int}/editar"
+@using DTOs
+@using Controladores
+@using Interfaz.ServiciosInterfaz
+@inject LogicaSesion Sesion
+@inject NavigationManager Navigator
+@inject ControladorProyectos ControladorProyectos
+@rendermode InteractiveServer
+
+@if (Sesion.UsuarioLogueado == null || !sesionCargada)
+{
+}
+else if (proyectoEliminado)
+{
+    <p>Redirigiendo...</p>
+    Navigator.NavigateTo("/exito/proyecto/eliminado");
+}
+else if (!ControladorProyectos.EsAdministradorDeProyecto(Sesion.UsuarioLogueado, id))
+{
+    <p class="text-danger text-center mt-5">No tienes permisos para editar este proyecto.</p>
+}
+else
+{
+    <h3 class="text-center mt-4 text-primary-emphasis">Editar Proyecto</h3>
+    <div class="row justify-content-center mt-3">
+        <div class="col-md-6">
+            @if (!string.IsNullOrEmpty(mensaje))
+            {
+                <div class="alert alert-@tipoAlerta d-flex align-items-center gap-2 text-center justify-content-center">
+                    <span class="fw-semibold">@((MarkupString)mensaje)</span>
+                </div>
+            }
+            <EditForm Model="proyectoEdicion" OnValidSubmit="@EditarDatosProyecto"
+                      OnInvalidSubmit="MostrarErroresValidacion">
+                <DataAnnotationsValidator/>
+                <ValidationSummary class="d-none"/>
+                <div class="form-group mb-3">
+                    <label for="nombre">Nombre</label>
+                    <InputText id="nombre" class="form-control" @bind-Value="proyectoEdicion.Nombre"/>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="descripcion">Descripción</label>
+                    <InputTextArea id="descripcion" class="form-control" @bind-Value="proyectoEdicion.Descripcion"/>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="inicio">Fecha de Inicio</label>
+                    <InputDate id="inicio" class="form-control" @bind-Value="proyectoEdicion.FechaInicio"/>
+                </div>
+                <div class="text-center">
+                    <button type="submit" class="btn btn-primary w-50">Guardar Cambios</button>
+                </div>
+            </EditForm>
+            <div class="text-center mt-3">
+                @if (!confirmarEliminacion)
+                {
+                    <button class="btn btn-danger w-50" @onclick="() => confirmarEliminacion = true">Eliminar Proyecto
+                    </button>
+                }
+                else
+                {
+                    <div class="alert alert-warning">
+                        <p class="mb-2">¿Estás seguro de que deseas eliminar este proyecto?</p>
+                        <button class="btn btn-danger me-2" @onclick="EliminarProyecto">Sí, eliminar</button>
+                        <button class="btn btn-secondary" @onclick="() => confirmarEliminacion = false">Cancelar
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool sesionCargada = false;
+
+    [Parameter] public int id { get; set; }
+    private ProyectoDTO proyecto;
+
+    private ProyectoEdicionDTO proyectoEdicion = new ProyectoEdicionDTO();
+    private string mensaje;
+    private string tipoAlerta;
+
+    private bool confirmarEliminacion = false;
+    private bool proyectoEliminado = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sesionCargada)
+        {
+            bool haySesionActiva = await Sesion.HaySesionActiva();
+
+            if (!haySesionActiva)
+            {
+                Navigator.NavigateTo("/");
+            }
+            else
+            {
+                await Sesion.ActualizarSesion();
+                sesionCargada = true;
+                try
+                {
+                    proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+                }
+                catch (Exception e)
+                {
+                    mensaje = e.Message;
+                    tipoAlerta = "danger";
+                    StateHasChanged();
+                    return;
+                }
+
+                proyectoEdicion = new ProyectoEdicionDTO
+                {
+                    Nombre = proyecto.Nombre,
+                    Descripcion = proyecto.Descripcion,
+                    FechaInicio = proyecto.FechaInicio
+                };
+                StateHasChanged(); // Vuelve a renderizar para mostrar la sesión activa
+            }
+        }
+    }
+
+    private async Task EditarDatosProyecto()
+    {
+        mensaje = string.Empty;
+        try
+        {
+            UsuarioDTO solicitante = Sesion.UsuarioLogueado;
+            if (!proyectoEdicion.Nombre.Equals(proyecto.Nombre))
+            {
+                ControladorProyectos.ModificarNombreDelProyecto(id, proyectoEdicion.Nombre, solicitante);
+            }
+
+            if (!proyectoEdicion.Descripcion.Equals(proyecto.Descripcion))
+            {
+                ControladorProyectos.ModificarDescripcionDelProyecto(id, proyectoEdicion.Descripcion, solicitante);
+            }
+
+            if (!proyectoEdicion.FechaInicio.Equals(proyecto.FechaInicio))
+            {
+                ControladorProyectos.ModificarFechaDeInicioDelProyecto(id, proyectoEdicion.FechaInicio, solicitante);
+            }
+
+            proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+            tipoAlerta = "success";
+            mensaje = "Cambios guardados correctamente.";
+            await Sesion.ActualizarSesion();
+            StateHasChanged();
+        }
+        catch (Exception e)
+        {
+            mensaje = e.Message;
+            tipoAlerta = "danger";
+        }
+    }
+
+    private async Task EliminarProyecto()
+    {
+        mensaje = string.Empty;
+        try
+        {
+            UsuarioDTO solicitante = Sesion.UsuarioLogueado;
+            ControladorProyectos.EliminarProyecto(id, solicitante);
+            proyectoEliminado = true;
+            await Sesion.ActualizarSesion();
+            StateHasChanged();
+        }
+        catch (Exception e)
+        {
+            mensaje = e.Message;
+            tipoAlerta = "danger";
+        }
+    }
+
+    private void MostrarErroresValidacion(EditContext editContext)
+    {
+        var errores = new List<string>();
+
+        foreach (var error in editContext.GetValidationMessages())
+        {
+            if (error.Contains("must be a date"))
+            {
+                errores.Add("La fecha de inicio debe ser una fecha válida.");
+            }
+            else
+            {
+                errores.Add(error);
+            }
+        }
+
+        var erroresFormateados = errores.Select(e => $"<li>{e}</li>");
+        mensaje = $"<ul class='list-unstyled mb-0'>{string.Join("", erroresFormateados)}</ul>";
+        tipoAlerta = "danger";
+    }
+}

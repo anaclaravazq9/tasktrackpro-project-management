@@ -1,0 +1,38 @@
+@inherits LayoutComponentBase
+@inject ServiciosInterfaz.LogicaSesion Sesion
+
+
+<div class="d-flex">
+
+    <!-- menu -->
+    <div class="bg-dark text-white p-3" style="width: 250px; min-height: 100vh;">
+        <h4 class="text-white">TaskTrackPro</h4>
+        <hr/>
+        <NavLink class="nav-link text-white" href="/inicio">Inicio</NavLink>
+
+        <div class="mt-3">
+            <p class="fw-bold">Proyectos</p>
+            <MisProyectos/>
+        </div>
+
+        <hr/>
+        <NavLink href="/recursosGenerales" class="nav-link text-white">Recursos Generales</NavLink>
+        <ItemsParaAdministradores/>
+        <ExportarProyectosItem/>
+        <NavLink href="/notificaciones" class="nav-link text-white">Notificaciones</NavLink>
+    </div>
+
+    <div class="flex-grow-1">
+        <div class="d-flex justify-content-end p-2 border-bottom bg-light">
+            <PerfilUsuario/>
+        </div>
+
+        <div class="p-4">
+            @Body
+        </div>
+    </div>
+</div>
+
+@code {
+}
+

@@ -1,0 +1,108 @@
+@using Controladores
+@using DTOs
+@using Interfaz.ServiciosInterfaz
+@inject LogicaSesion Sesion
+@inject NavigationManager Navigation
+@inject ControladorProyectos ControladorProyectos
+@rendermode InteractiveServer
+@implements IDisposable
+
+
+@if (Sesion.UsuarioLogueado is not null)
+{
+    @if (Sesion.EsAdminSistema())
+    {
+        proyectos = ControladorProyectos.ObtenerTodos();
+    }
+    else
+    {
+        proyectos = ControladorProyectos.ObtenerProyectosPorUsuario(Sesion.UsuarioLogueado.Id);
+    }
+
+    foreach (var proyecto in proyectos)
+    {
+        <details class="mb-2">
+            <summary>
+                @if (ControladorProyectos.EsAdministradorDeProyecto(Sesion.UsuarioLogueado, proyecto.Id))
+                {
+                    <i class="bi bi-star-fill text-white me-1" title="Administrador del proyecto"></i>
+                }
+                @proyecto.Nombre
+            </summary>
+            <ul class="list-unstyled ms-3">
+                <li>
+                    <NavLink href="@($"/proyecto/{proyecto.Id}/diagrama_de_gantt")" class="nav-link text-white">Gantt
+                    </NavLink>
+                </li>
+                <li>
+                    <NavLink href="@($"/proyecto/{proyecto.Id}/tareas")" class="nav-link text-white">Tareas</NavLink>
+                </li>
+                <li>
+                    <NavLink href="@($"/proyecto/{proyecto.Id}/recursos_exclusivos")"
+                             class="nav-link text-white text-nowrap">Recursos Exclusivos
+                    </NavLink>
+                </li>
+                <li>
+                    <NavLink href="@($"/proyecto/{proyecto.Id}/panel_recursos")" class="nav-link text-white text-nowrap">
+                        Panel de Recursos
+                    </NavLink>
+                </li>
+                <li>
+                    <NavLink href="@($"/proyecto/{proyecto.Id}/miembros")" class="nav-link text-white">Miembros
+                    </NavLink>
+                </li>
+                @if (ControladorProyectos.EsAdministradorDeProyecto(Sesion.UsuarioLogueado, proyecto.Id))
+                {
+                    <li>
+                        <NavLink href="@($"/proyecto/{proyecto.Id}/editar")" class="nav-link text-white">Editar
+                        </NavLink>
+                    </li>
+                }
+                <li>
+                    <NavLink href="@($"/informacion/proyecto/{proyecto.Id}")" class="nav-link text-white">Información
+                    </NavLink>
+                </li>
+            </ul>
+        </details>
+    }
+}
+
+@code {
+    private List<ProyectoDTO> proyectos;
+    private bool sesionCargada = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sesionCargada)
+        {
+            bool haySesionActiva = await Sesion.HaySesionActiva();
+
+            if (!haySesionActiva)
+            {
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                await Sesion.ActualizarSesion();
+                sesionCargada = true;
+                StateHasChanged(); // Vuelve a renderizar para mostrar la sesión activa
+            }
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        Sesion.SesionModificada += RefrescarLayout;
+    }
+
+    private void RefrescarLayout()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Sesion.SesionModificada -= RefrescarLayout;
+    }
+
+}

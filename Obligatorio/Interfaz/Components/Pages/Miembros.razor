@@ -1,0 +1,490 @@
+@page "/proyecto/{id:int}/miembros"
+@using DTOs
+@using Controladores
+@using Excepciones
+@using Interfaz.ServiciosInterfaz
+@rendermode InteractiveServer
+@inject LogicaSesion Sesion
+@inject NavigationManager Navigation
+@inject ControladorProyectos ControladorProyectos
+@inject ControladorUsuarios ControladorUsuarios
+
+@if (Sesion.UsuarioLogueado == null || !sesionCargada)
+{
+}
+else if (!Sesion.EsAdminSistema() && !ControladorProyectos.EsMiembroDeProyecto(Sesion.UsuarioLogueado.Id, id))
+{
+    <p class="text-danger">No tenés acceso a los miembros de este proyecto.</p>
+}
+else
+{
+    <h3>Miembros</h3>
+
+    @if (mostrarMensajeExitoCambioAdmin)
+    {
+        <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+            El administrador del proyecto fue actualizado correctamente.
+            <button type="button" class="btn-close" @onclick="() => mostrarMensajeExitoCambioAdmin = false"></button>
+        </div>
+    }
+
+    @if (mostrarMensajeExitoAgregar)
+    {
+        <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+            El miembro fue agregado exitosamente.
+            <button type="button" class="btn-close" @onclick="() => mostrarMensajeExitoAgregar = false"></button>
+        </div>
+    }
+
+    @if (mostrarMensajeExitoEliminar)
+    {
+        <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+            El miembro fue eliminado correctamente.
+            <button type="button" class="btn-close" @onclick="() => mostrarMensajeExitoEliminar = false"></button>
+        </div>
+    }
+
+    <table class="table">
+        <thead>
+        <tr>
+            <th>Nombre</th>
+            <th>Apellido</th>
+            <th>Email</th>
+            <th>Rol</th>
+            @if (esAdminProyecto)
+            {
+                <th></th>
+            }
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (UsuarioListarDTO miembro in miembros)
+        {
+            <tr>
+                <td>@miembro.Nombre</td>
+                <td>@miembro.Apellido</td>
+                <td>@miembro.Email</td>
+                <td>
+                    @if (miembro.Id == proyecto.Administrador.Id)
+                    {
+                        <span class="badge bg-info text-white ms-1">Administrador de proyecto</span>
+                    }
+                    @if (miembro.EsLider)
+                    {
+                        <span class="badge bg-success text-white ms-1">Líder de @miembro.CantidadProyectosLiderando proyecto(s).</span>
+                    }
+                </td>
+                @if (esAdminProyecto && miembro.Id != proyecto.Administrador.Id)
+                {
+                    <td>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => ConfirmarEliminar(miembro)">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                }
+            </tr>
+        }
+        </tbody>
+    </table>
+    <div class="d-flex gap-2 mt-3">
+        @if (esAdminProyecto)
+        {
+            <button class="btn btn-primary" @onclick="MostrarModalAgregar">
+                <i class="bi bi-plus-circle"></i> Agregar nuevo miembro
+            </button>
+        }
+        @if (Sesion.UsuarioLogueado.EsAdministradorSistema)
+        {
+            <button class="btn btn-secondary" @onclick="MostrarModalCambioAdmin">Cambiar administrador de proyecto
+            </button>
+        }
+        @if (Sesion.UsuarioLogueado.EsAdministradorSistema || esAdminProyecto)
+        {
+            <button class="btn btn-secondary" @onclick="MostrarModalAsignarLider">Asignar líder de proyecto</button>
+        }
+        @if (ControladorProyectos.ExisteLiderEnProyecto(proyecto.Id) && (Sesion.UsuarioLogueado.EsAdministradorSistema || esAdminProyecto))
+        {
+        <button class="btn btn-secondary" @onclick="DesasignarLiderProyecto">Eliminar líder de proyecto</button>
+        }
+    </div>
+
+    @if (mostrarModalAgregar)
+    {
+        <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Nuevo miembro:</h5>
+                        <button class="btn-close" @onclick="CerrarModalAgregar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <select class="form-select" @bind="idNuevoMiembro">
+                            <option value="">Seleccione un usuario</option>
+                            @foreach (var u in usuariosNoMiembros)
+                            {
+                                <option value="@u.Id">@u.Nombre @u.Apellido (@u.Email)</option>
+                            }
+                        </select>
+                        @if (mostrarErrorAgregar)
+                        {
+                            <div class="alert alert-danger mt-2">Debe seleccionar un miembro.</div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-success" @onclick="AgregarMiembro">
+                            <i class="bi bi-plus-circle"></i> Agregar miembro
+                        </button>
+                        <button class="btn btn-secondary" @onclick="CerrarModalAgregar">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (mostrarModalEliminar)
+    {
+        <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Confirmar eliminación</h5>
+                        <button class="btn-close" @onclick="CancelarEliminar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>
+                            ¿Está seguro que desea eliminar a
+                            <strong>@miembroAEliminar?.Nombre @miembroAEliminar?.Apellido</strong>
+                            (@miembroAEliminar?.Email)?
+                        </p>
+                        @if (mostrarErrorEliminarMiembro)
+                        {
+                            <div class="alert alert-danger mt-2">@errorEliminarMiembro</div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-danger" @onclick="EliminarMiembro">Eliminar</button>
+                        <button class="btn btn-secondary" @onclick="CancelarEliminar">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (mostrarModalCambioAdmin)
+    {
+        <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="modal-title">Administrador</h5>
+                        <button class="btn-close" @onclick="CerrarModalCambioAdmin"></button>
+                    </div>
+
+                    <p>
+                        <strong>Actual:</strong> @proyecto.Administrador.Nombre @proyecto.Administrador.Apellido (@proyecto.Administrador.Email)
+                    </p>
+
+                    <div class="mb-3">
+                        <label><strong>Nuevo Administrador:</strong></label>
+                        <select class="form-select" @bind="idNuevoAdmin">
+                            <option value="">Seleccione un miembro</option>
+                            @foreach (var miembro in miembros.Where(m => m.Id != proyecto.Administrador.Id))
+                            {
+                                <option value="@miembro.Id">@miembro.Nombre @miembro.Apellido (@miembro.Email)</option>
+                            }
+                        </select>
+                        @if (mostrarErrorCambioAdmin)
+                        {
+                            <div class="alert alert-danger mt-2">@errorMensajeCambioAdmin</div>
+                        }
+                    </div>
+
+                    <div class="d-flex justify-content-end">
+                        <button class="btn btn-success" @onclick="CambiarAdministrador">Guardar cambios</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@if (mostrarModalAsignarLider)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="modal-title">Líder del proyecto</h5>
+                    <button class="btn-close" @onclick="() => mostrarModalAsignarLider = false"></button>
+                </div>
+
+                <div class="mb-3">
+                    <label><strong>Nuevo Líder:</strong></label>
+                    <select class="form-select" @bind="idNuevoLider">
+                        <option value="">Seleccione un miembro</option>
+                        @foreach (var miembro in miembros)
+                        {
+                            <option value="@miembro.Id">@miembro.Nombre @miembro.Apellido (@miembro.Email)</option>
+                        }
+                    </select>
+                    @if (mostrarErrorAsignarLider)
+                    {
+                        <div class="alert alert-danger mt-2">@errorMensajeAsignarLider</div>
+                    }
+                </div>
+
+                <div class="d-flex justify-content-end">
+                    <button class="btn btn-success" @onclick="AsignarLider">Guardar cambios</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int id { get; set; }
+
+    private ProyectoDTO proyecto;
+    private List<UsuarioListarDTO> miembros = new();
+    private List<UsuarioListarDTO> usuariosNoMiembros = new();
+    private UsuarioDTO miembroAEliminar;
+    private bool mostrarModalEliminar = false;
+
+    private bool mostrarModalAgregar = false;
+    private int? idNuevoMiembro;
+    private bool mostrarErrorAgregar = false;
+
+    private bool mostrarModalCambioAdmin = false;
+    private int? idNuevoAdmin;
+    private bool mostrarErrorCambioAdmin = false;
+    private string errorMensajeCambioAdmin = "";
+
+    private bool sesionCargada = false;
+    private bool esAdminProyecto = false;
+
+    private bool mostrarMensajeExitoCambioAdmin = false;
+    private bool mostrarMensajeExitoAgregar = false;
+    private bool mostrarMensajeExitoEliminar = false;
+
+    private string errorEliminarMiembro = "";
+    private bool mostrarErrorEliminarMiembro = false;
+    
+    private bool mostrarModalAsignarLider = false;
+    private int? idNuevoLider;
+    private bool mostrarErrorAsignarLider = false;
+    private string errorMensajeAsignarLider = "";
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sesionCargada)
+        {
+            bool haySesionActiva = await Sesion.HaySesionActiva();
+
+            if (!haySesionActiva)
+            {
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                await Sesion.ActualizarSesion();
+                CargarDatosDelProyecto();
+                sesionCargada = true;
+                StateHasChanged(); // Vuelve a renderizar para mostrar la sesión activa
+            }
+        }
+    }
+
+    private void CargarDatosDelProyecto()
+    {
+        try
+        {
+            proyecto = ControladorProyectos.ObtenerProyectoPorId(id);
+            miembros = proyecto.Miembros;
+            usuariosNoMiembros = ControladorUsuarios.ObtenerUsuariosDiferentes(miembros);
+            esAdminProyecto = ControladorProyectos.EsAdministradorDeProyecto(Sesion.UsuarioLogueado, proyecto.Id);
+        }
+        catch
+        {
+            Navigation.NavigateTo("/");
+        }
+    }
+
+    private void MostrarModalAgregar()
+    {
+        mostrarErrorAgregar = false;
+        idNuevoMiembro = null;
+        mostrarModalAgregar = true;
+    }
+
+    private void CerrarModalAgregar()
+    {
+        mostrarModalAgregar = false;
+    }
+    
+    private void MostrarModalAsignarLider()
+    {
+        idNuevoLider = null;
+        mostrarErrorAsignarLider = false;
+        errorMensajeAsignarLider = "";
+        mostrarModalAsignarLider = true;
+    }
+    
+    private async void AsignarLider()
+    {
+        mostrarErrorAsignarLider = false;
+        errorMensajeAsignarLider = "";
+
+        if (idNuevoLider == null)
+        {
+            mostrarErrorAsignarLider = true;
+            errorMensajeAsignarLider = "Debe seleccionar un líder.";
+            return;
+        }
+
+        try
+        {
+            ControladorProyectos.AsignarLider(id, Sesion.UsuarioLogueado, idNuevoLider.Value);
+            mostrarModalAsignarLider = false;
+            CargarDatosDelProyecto(); 
+            await Sesion.ActualizarSesion();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMensajeAsignarLider = ex.Message;
+            mostrarErrorAsignarLider = true;
+        }
+    }
+
+    private void AgregarMiembro()
+    {
+        if (idNuevoMiembro == null)
+        {
+            mostrarErrorAgregar = true;
+            return;
+        }
+
+        UsuarioDTO nuevo = ControladorUsuarios.ObtenerUsuarioPorId(idNuevoMiembro.Value);
+        ControladorProyectos.AgregarMiembroAProyecto(id, Sesion.UsuarioLogueado, nuevo);
+        usuariosNoMiembros.RemoveAll(u => u.Id == nuevo.Id);
+        mostrarModalAgregar = false;
+        mostrarMensajeExitoAgregar = true;
+        CargarDatosDelProyecto();
+    }
+
+    private void ConfirmarEliminar(UsuarioListarDTO usuario)
+    {
+        miembroAEliminar = UsuarioDTO.DesdeListarDTO(usuario);
+        mostrarErrorEliminarMiembro = false;
+        errorEliminarMiembro = "";
+        mostrarModalEliminar = true;
+    }
+
+    private void CancelarEliminar()
+    {
+        mostrarModalEliminar = false;
+        mostrarErrorEliminarMiembro = false;
+        errorEliminarMiembro = "";
+    }
+
+    private void EliminarMiembro()
+    {
+        try
+        {
+            mostrarErrorEliminarMiembro = false;
+            errorEliminarMiembro = "";
+
+            ControladorProyectos.VerificarUsuarioNoTieneTareasAsignadas(id, miembroAEliminar.Id);
+
+            ControladorProyectos.EliminarMiembroDelProyecto(id, Sesion.UsuarioLogueado, miembroAEliminar.Id);
+            miembros.RemoveAll(u => u.Id == miembroAEliminar.Id);
+            usuariosNoMiembros.Add(UsuarioListarDTO.DesdeDTO(miembroAEliminar));
+            mostrarModalEliminar = false;
+            mostrarMensajeExitoEliminar = true;
+            CargarDatosDelProyecto();
+        }
+        catch (ExcepcionProyecto)
+        {
+            errorEliminarMiembro = "No se puede eliminar al miembro del proyecto, tiene tareas asignadas. Para eliminarlo debe eliminarlo previamente de las tareas que tiene asignadas.";
+            mostrarErrorEliminarMiembro = true;
+        }
+        catch (ExcepcionPermisos)
+        {
+            errorEliminarMiembro = "No tiene permisos para eliminar el miembro de este proyecto.";
+            mostrarErrorEliminarMiembro = true;
+        }
+        catch (Exception)
+        {
+            errorEliminarMiembro = "Ocurrió un error inesperado.";
+            mostrarErrorEliminarMiembro = true;
+        }
+    }
+
+    private async void DesasignarLiderProyecto()
+    {
+        try
+        {
+            ControladorProyectos.DesasignarLider(proyecto.Id, Sesion.UsuarioLogueado);
+            CargarDatosDelProyecto();
+            await Sesion.ActualizarSesion();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            // Podés mostrar un mensaje de error si querés
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    private void MostrarModalCambioAdmin()
+    {
+        idNuevoAdmin = null;
+        mostrarErrorCambioAdmin = false;
+        mostrarModalCambioAdmin = true;
+    }
+
+    private void CerrarModalCambioAdmin()
+    {
+        mostrarModalCambioAdmin = false;
+    }
+
+    private async Task CambiarAdministrador()
+    {
+        mostrarErrorCambioAdmin = false;
+        errorMensajeCambioAdmin = "";
+
+        if (idNuevoAdmin == null)
+        {
+            mostrarErrorCambioAdmin = true;
+            errorMensajeCambioAdmin = "Debe seleccionar un nuevo administrador.";
+            return;
+        }
+
+        try
+        {
+            ControladorProyectos.CambiarAdministradorDeProyecto(Sesion.UsuarioLogueado, id, idNuevoAdmin.Value);
+            proyecto.Administrador = UsuarioDTO.DesdeListarDTO(miembros.First(u => u.Id == idNuevoAdmin.Value));
+            await Sesion.ActualizarSesion();
+            StateHasChanged();
+            esAdminProyecto = proyecto.Administrador.Id == Sesion.UsuarioLogueado.Id;
+            mostrarModalCambioAdmin = false;
+            mostrarMensajeExitoCambioAdmin = true;
+        }
+        catch (Exception ex)
+        {
+            UsuarioListarDTO usuario = miembros.FirstOrDefault(u => u.Id == idNuevoAdmin.Value);
+            if (usuario != null)
+            {
+                errorMensajeCambioAdmin = $"{usuario.Nombre} {usuario.Apellido} ({usuario.Email}) no tiene el permiso de administrar proyectos. Seleccione otro usuario.";
+            }
+            else
+            {
+                errorMensajeCambioAdmin = ex.Message;
+            }
+
+            mostrarErrorCambioAdmin = true;
+        }
+    }
+
+}

@@ -1,0 +1,67 @@
+@page "/proyecto/{id:int}/diagrama_de_gantt"
+@using DTOs
+@using Controladores
+@rendermode InteractiveServer
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+@inject ControladorProyectos ControladorProyectos
+
+
+<h3>Diagrama de Gantt</h3>
+@if (!ControladorProyectos.ObtenerProyectoPorId(Id).Tareas.Any())
+{
+    <p>Aún no se han asignado tareas al proyecto. El diagrama se actualizará cuando se añadan tareas.</p>
+}
+else
+{
+    <div id="ganttDiagrama"></div>
+    <p style="margin-top: 1rem; font-style: italic; color: #555;">
+        Las tareas del camino crítico están resaltadas en rojo, y las tareas completadas en verde.
+    </p>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private ProyectoDTO proyecto;
+    //private bool graficoDibujado = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                proyecto = ControladorProyectos.ObtenerProyectoPorId(Id);
+            }
+            catch
+            {
+                NavigationManager.NavigateTo("/Error");
+                return;
+            }
+
+            ControladorProyectos.CalcularCaminoCritico(proyecto);
+            proyecto = ControladorProyectos.ObtenerProyectoPorId(proyecto.Id);
+            StateHasChanged(); // Asegurar que el div se renderice primero
+            return; // Esperar hasta el segundo render
+        }
+
+        if (proyecto != null) //&& !graficoDibujado)
+        {
+            ControladorProyectos.CalcularCaminoCritico(proyecto);
+            proyecto = ControladorProyectos.ObtenerProyectoPorId(proyecto.Id);
+            var tareas = proyecto.Tareas.Select(t => new
+            {
+                titulo = t.Titulo,
+                fechaInicio = t.FechaInicioMasTemprana.ToString("yyyy-MM-dd"),
+                fechaFin = t.FechaFinMasTemprana.AddDays(1).ToString("yyyy-MM-dd"), // añadimos un día para representar que la tarea se completa hasta el final del día
+                fechaFinReal = t.FechaFinMasTemprana.ToString("yyyy-MM-dd"),
+                estado = t.Estado,
+                holgura = t.Holgura
+            }).ToList();
+
+            await JSRuntime.InvokeVoidAsync("dibujarGanttConApex", "#ganttDiagrama", tareas);
+            //graficoDibujado = true;
+        }
+    }
+
+}

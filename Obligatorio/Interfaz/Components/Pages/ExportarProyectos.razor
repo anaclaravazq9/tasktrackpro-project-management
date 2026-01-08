@@ -1,0 +1,42 @@
+﻿@page "/ExportarProyectos"
+@using Interfaz.ServiciosInterfaz
+@rendermode InteractiveServer
+@inject LogicaSesion Sesion
+@inject NavigationManager Navigator
+
+
+@if (Sesion.UsuarioLogueado == null || !sesionCargada)
+{
+}
+else if (Sesion.EsLider())
+{
+    <h3>Exportar Proyectos</h3>
+    
+    <a class="btn btn-primary me-2" href="/exportar/csv" download>Formato CSV</a>
+    
+    <a class="btn btn-secondary" href="/exportar/json" download>Formato JSON</a>
+    
+}
+
+@code {
+    private bool sesionCargada = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !sesionCargada)
+        {
+            bool haySesionActiva = await Sesion.HaySesionActiva();
+
+            if (!haySesionActiva)
+            {
+                Navigator.NavigateTo("/");
+            }
+            else
+            {
+                await Sesion.ActualizarSesion();
+                sesionCargada = true;
+                StateHasChanged(); // Vuelve a renderizar para mostrar la sesión activa
+            }
+        }
+    }
+}
